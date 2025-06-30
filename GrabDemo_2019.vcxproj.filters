@@ -1,0 +1,104 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="源文件">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="头文件">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="资源文件">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="头文件\IRCMD_COM">
+      <UniqueIdentifier>{e2151d5b-754e-4595-bed8-e0be6e3c63de}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="源文件\IRCMD_COM">
+      <UniqueIdentifier>{2b2ee3b1-9156-4790-8b21-7f142517ce4b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="CUDA">
+      <UniqueIdentifier>{e64f8659-d019-4eed-ab5a-f28a7ac24362}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="GrabDemo.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="GrabDemoDlg.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="IRCMD_COM\ComFrame.cpp">
+      <Filter>源文件\IRCMD_COM</Filter>
+    </ClCompile>
+    <ClCompile Include="IRCMD_COM\SerialThread.cpp">
+      <Filter>源文件\IRCMD_COM</Filter>
+    </ClCompile>
+    <ClCompile Include="DistortionCailbration.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="MyTensorRT.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="GrabDemo.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="GrabDemoDlg.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="StdAfx.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="IRCMD_COM\CnComm.h">
+      <Filter>头文件\IRCMD_COM</Filter>
+    </ClInclude>
+    <ClInclude Include="IRCMD_COM\ComFrame.h">
+      <Filter>头文件\IRCMD_COM</Filter>
+    </ClInclude>
+    <ClInclude Include="IRCMD_COM\SerialThread.h">
+      <Filter>头文件\IRCMD_COM</Filter>
+    </ClInclude>
+    <ClInclude Include="Float32_16.h">
+      <Filter>头文件\IRCMD_COM</Filter>
+    </ClInclude>
+    <ClInclude Include="DistortionCailbration.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="MyTensorRT.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="GrabDemo.rc">
+      <Filter>源文件</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="res\DalsaBanner.bmp">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="res\GrabDemo.ico">
+      <Filter>资源文件</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="res\GrabDemo.rc2">
+      <Filter>资源文件</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="mySource.cu">
+      <Filter>CUDA</Filter>
+    </CudaCompile>
+    <CudaCompile Include="MyTensorRTKernels.cu">
+      <Filter>CUDA</Filter>
+    </CudaCompile>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,340 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "afxres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// 中文(简体) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_CHS)
+LANGUAGE LANG_CHINESE, SUBLANG_NEUTRAL
+#pragma code_page(936)
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_GRABDEMO_DIALOG DIALOGEX 0, 0, 785, 590
+STYLE DS_SETFONT | DS_NOIDLEMSG | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+EXSTYLE WS_EX_APPWINDOW
+CAPTION "Sapera Grab Demo"
+FONT 8, "宋体", 400, 0, 0x86
+BEGIN
+    PUSHBUTTON      "&New",IDC_FILE_NEW,54,60,55,15
+    PUSHBUTTON      "&Load",IDC_FILE_LOAD,54,79,55,15
+    PUSHBUTTON      "&Save",IDC_FILE_SAVE,54,97,55,15
+    PUSHBUTTON      "&General",IDC_GENERAL_OPTIONS,53,183,54,15
+    PUSHBUTTON      "&Area Scan",IDC_AREA_SCAN_OPTIONS,53,220,54,15
+    PUSHBUTTON      "&Line Scan",IDC_LINE_SCAN_OPTIONS,53,238,54,15
+    PUSHBUTTON      "&Composite",IDC_COMPOSITE_OPTIONS,53,201,54,15
+    PUSHBUTTON      "&Load Config",IDC_LOAD_ACQ_CONFIG,53,166,54,15
+    PUSHBUTTON      "&Exit",IDC_EXIT,340,8,36,35
+    PUSHBUTTON      "&Snap",IDC_SNAP,63,18,85,15
+    PUSHBUTTON      "&Grab",IDC_GRAB,156,18,85,15
+    PUSHBUTTON      "&Freeze",IDC_FREEZE,247,18,85,15
+    PUSHBUTTON      "&Buffer",IDC_BUFFER_OPTIONS,53,292,55,15
+    CONTROL         "",IDC_VIEW_WND,"Static",SS_BLACKRECT,176,137,317,250
+    PUSHBUTTON      "&View",IDC_VIEW_OPTIONS,53,310,55,15
+    GROUPBOX        "Acquisition Control",IDC_STATIC,48,6,289,36
+    GROUPBOX        "General Options",IDC_STATIC,46,279,72,54
+    GROUPBOX        "File Control",IDC_STATIC,48,48,72,85
+    GROUPBOX        "Acquisition Options",IDC_STATIC,46,153,72,120
+    LTEXT           "",IDC_STATUS,127,50,211,10,SS_CENTERIMAGE | SS_SUNKEN
+    CONTROL         IDB_BANNER,IDC_BANNER,"Static",SS_BITMAP | SS_CENTERIMAGE,0,0,43,293,WS_EX_ACCEPTFILES | WS_EX_STATICEDGE
+    PUSHBUTTON      "&Image Filter",IDC_IMAGE_FILTER_OPTIONS,53,255,54,15
+    PUSHBUTTON      "SaveMulti",IDC_SaveMulti,57,116,50,14
+    EDITTEXT        IDC_BUFFER_FRAME_RATE,124,78,40,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_Frame_Count,111,118,40,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "SaveTiming",IDC_Save_Timing,55,136,50,14
+    PUSHBUTTON      "TimingStop",IDC_Timing_Stop,119,96,50,14
+    EDITTEXT        IDC_nMS,111,135,40,14,ES_AUTOHSCROLL
+    CONTROL         "GPU",IDC_GPU,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,351,48,28,10
+    PUSHBUTTON      "低温本底采集",IDC_TP_Cold,385,9,57,21
+    PUSHBUTTON      "高温本底采集",IDC_TP_Hot,451,9,55,20
+    CONTROL         "两点矫正",IDC_TP_Correction,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,386,36,45,10
+    CONTROL         "盲元矫正",IDC_Blind_Correction,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,434,38,45,10
+    CONTROL         "直方图增强",IDC_H_Enhance,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,481,37,53,10
+    GROUPBOX        "下位机控制",IDC_STATIC,0,324,153,229
+    PUSHBUTTON      "低温本底_采集",FPGA_GetLow,9,372,53,16
+    PUSHBUTTON      "NETD",IDC_NETD,441,58,50,14
+    EDITTEXT        IDC_NETDshow,387,58,40,14,ES_AUTOHSCROLL
+    GROUPBOX        "I2C Communication",IDC_STATIC,535,6,221,102
+    LTEXT           "写",IDC_STATIC,551,21,8,8
+    LTEXT           "读",IDC_STATIC,581,20,8,8
+    EDITTEXT        I2C_nW,562,18,18,14,ES_AUTOHSCROLL
+    EDITTEXT        I2C_nR,591,18,18,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "开始读写",I2C_OK,612,18,50,14
+    LTEXT           "0xA0",IDC_STATIC,553,38,17,8
+    EDITTEXT        I2C_i1,592,35,18,14,ES_AUTOHSCROLL
+    EDITTEXT        I2C_i2,611,35,18,14,ES_AUTOHSCROLL
+    EDITTEXT        I2C_i3,631,35,18,14,ES_AUTOHSCROLL
+    EDITTEXT        I2C_i0,572,35,18,14,ES_AUTOHSCROLL
+    LTEXT           "写:",IDC_STATIC,540,38,12,8
+    LTEXT           "读:",IDC_STATIC,540,52,12,8
+    EDITTEXT        I2C_o0,572,50,18,14,ES_AUTOHSCROLL
+    EDITTEXT        I2C_o1,592,50,18,14,ES_AUTOHSCROLL
+    EDITTEXT        I2C_o2,612,50,18,14,ES_AUTOHSCROLL
+    COMBOBOX        FPGA_COMBO,3,336,64,30,CBS_DROPDOWN | CBS_SORT | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "Open",FPGA_Open,89,334,33,14
+    PUSHBUTTON      "Close",FPGA_Close,89,351,30,14
+    PUSHBUTTON      "增强_打开",FPGA_HE,67,393,56,16
+    PUSHBUTTON      "高温本底_采集",FPGA_GetHigh,68,372,54,17
+    PUSHBUTTON      "盲元矫正_打开",FPGA_Blind_Correction,9,393,52,16
+    PUSHBUTTON      "两点矫正_打开",FPGA_TP_Correction,9,412,52,16
+    PUSHBUTTON      "中值滤波_打开",FPGA_Median_Filter,67,412,56,17
+    PUSHBUTTON      "NETD测试按键",NETD_test,390,82,50,14
+    EDITTEXT        FPGA_Tmp,73,471,43,16,ES_AUTOHSCROLL
+    LTEXT           "温度：",FPGA_static,17,474,37,12
+    PUSHBUTTON      "通信测试按键",FPGA_TEST,152,393,50,14
+    PUSHBUTTON      "更新盲元表",FPGA_BPmap,9,432,51,15
+    PUSHBUTTON      "更新校正表",FPGA_TPmap,66,432,54,16
+    EDITTEXT        FPGA_frames,329,75,40,14,ES_AUTOHSCROLL
+    LTEXT           "图像帧率:",IDC_STATIC,283,78,34,8
+    LTEXT           "mK",IDC_STATIC,431,61,9,8
+    PUSHBUTTON      "调整积分时间",FPGA_Integral,67,451,51,15
+    EDITTEXT        FPGA_InterNum,11,453,48,15,ES_AUTOHSCROLL
+    PUSHBUTTON      "码率计算",I2C_BitRate,675,24,50,14
+    EDITTEXT        I2C_Rates,679,44,40,14,ES_AUTOHSCROLL
+    LTEXT           "Height:",IDC_STATIC,213,64,29,8
+    LTEXT           "Width:",IDC_STATIC,214,80,25,8
+    EDITTEXT        FPGA_Height,244,63,29,13,ES_AUTOHSCROLL
+    EDITTEXT        FPGA_Width,243,78,29,13,ES_AUTOHSCROLL
+    COMBOBOX        FPGA_COmbeRate,3,353,48,30,CBS_DROPDOWN | CBS_SORT | WS_VSCROLL | WS_TABSTOP
+    COMBOBOX        I2C_Mode,549,77,48,30,CBS_DROPDOWN | CBS_SORT | WS_VSCROLL | WS_TABSTOP
+    COMBOBOX        I2C_BitSet,601,76,81,30,CBS_DROPDOWN | CBS_SORT | WS_VSCROLL | WS_TABSTOP
+    COMBOBOX        I2C_TImeSet,684,76,72,30,CBS_DROPDOWN | CBS_SORT | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "确定",I2C_Change1,548,93,50,14
+    PUSHBUTTON      "确定",I2C_Change2,619,92,50,14
+    PUSHBUTTON      "确定",I2C_Change3,690,92,50,14
+    CONTROL         "双边滤波",PC_bilateralFilter,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,69,490,45,10
+    EDITTEXT        FPGA_Bits,329,60,40,14,ES_AUTOHSCROLL
+    LTEXT           "图像数据位宽:",IDC_STATIC,280,63,49,8
+    LTEXT           "图像传输速率:",IDC_STATIC,279,93,49,8
+    EDITTEXT        FPGA_BitsRates,329,91,40,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "更新Flash",FPGA_NU,11,487,50,14
+    PUSHBUTTON      "刷新",FPGA_Update,13,524,50,14
+    EDITTEXT        FPGA_WinHeight,48,504,19,15,ES_AUTOHSCROLL
+    EDITTEXT        FPGA_WinWidth,81,504,19,15,ES_AUTOHSCROLL
+    LTEXT           "开窗大小：H",PointValue,4,508,42,12
+    LTEXT           "W",PointValue2,72,507,9,9
+    PUSHBUTTON      "开窗",FPGA_WinChange,105,505,27,14
+    CONTROL         "畸变矫正",IDC_Local_Enlarge,"Button",BS_AUTOCHECKBOX | BS_VCENTER | WS_TABSTOP,669,170,51,14
+    CONTROL         "目标检测",IDC_DETECTION_CHECK,"Button",BS_AUTOCHECKBOX | BS_VCENTER | WS_TABSTOP,669,195,45,10
+    CONTROL         "深度估计",IDC_DEPTH_CHECK,"Button",BS_AUTOCHECKBOX | BS_VCENTER | WS_TABSTOP,670,217,45,10
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO
+BEGIN
+    IDD_GRABDEMO_DIALOG, DIALOG
+    BEGIN
+        RIGHTMARGIN, 782
+        BOTTOMMARGIN, 553
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// AFX_DIALOG_LAYOUT
+//
+
+IDD_GRABDEMO_DIALOG AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+#endif    // 中文(简体) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+/////////////////////////////////////////////////////////////////////////////
+// 英语(美国) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_ABOUTBOX DIALOGEX 0, 0, 217, 55
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "About Grab Demo"
+FONT 8, "MS Sans Serif", 0, 0, 0x0
+BEGIN
+    ICON            IDR_MAINFRAME,IDC_STATIC,11,17,20,20
+    LTEXT           "Sapera Grab Demo Version 8.40",IDC_STATIC,40,10,133,8,SS_NOPREFIX
+    LTEXT           "Copyright (c) Teledyne DALSA Inc. 1997-2017",IDC_STATIC,40,25,170,8
+    DEFPUSHBUTTON   "OK",IDOK,178,7,32,14,WS_GROUP
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO
+BEGIN
+    IDD_ABOUTBOX, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 210
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 48
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "#define _AFX_NO_SPLITTER_RESOURCES\r\n"
+    "#define _AFX_NO_OLE_RESOURCES\r\n"
+    "#define _AFX_NO_TRACKER_RESOURCES\r\n"
+    "#define _AFX_NO_PROPERTY_RESOURCES\r\n"
+    "\r\n"
+    "#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)\r\n"
+    "#ifdef _WIN32\r\n"
+    "LANGUAGE 9, 1\r\n"
+    "#pragma code_page(1252)\r\n"
+    "#endif\r\n"
+    "#include ""res\\GrabDemo.rc2""  // non-Microsoft Visual C++ edited resources\r\n"
+    "#include ""afxres.rc""         // Standard components\r\n"
+    "#endif\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDR_MAINFRAME           ICON                    "res\\GrabDemo.ico"
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 8,40,0,0
+ PRODUCTVERSION 8,40,0,0
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x4L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName", "Teledyne DALSA"
+            VALUE "FileDescription", "Sapera Grab Demo"
+            VALUE "FileVersion", "8.40"
+            VALUE "InternalName", "GrabDemo"
+            VALUE "LegalCopyright", "Copyright (c) Teledyne DALSA Inc. 1997-2017"
+            VALUE "OriginalFilename", "GrabDemo.exe"
+            VALUE "ProductName", "Sapera LT"
+            VALUE "ProductVersion", "8.40"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Bitmap
+//
+
+IDB_BANNER              BITMAP                  "res\\DalsaBanner.bmp"
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE
+BEGIN
+    IDS_ABOUTBOX            "&About Grab Demo..."
+END
+
+#endif    // 英语(美国) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+#define _AFX_NO_SPLITTER_RESOURCES
+#define _AFX_NO_OLE_RESOURCES
+#define _AFX_NO_TRACKER_RESOURCES
+#define _AFX_NO_PROPERTY_RESOURCES
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+#ifdef _WIN32
+LANGUAGE 9, 1
+#pragma code_page(1252)
+#endif
+#include "res\GrabDemo.rc2"  // non-Microsoft Visual C++ edited resources
+#include "afxres.rc"         // Standard components
+#endif
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+
