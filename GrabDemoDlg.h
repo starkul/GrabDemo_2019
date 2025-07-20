@@ -81,7 +81,9 @@ protected:
 	//SapView        *m_ViewProcessed;
 
 	static CGrabDemoDlg   *m_DlgPointer;  //回调函数访问非静态成员
-	static MyTensorRT* m_tensorRT;
+	static MyTensorRT* m_super_tensorRT;
+	static MyTensorRT* m_detect_tensorRT;
+	static MyTensorRT* m_depth_tensorRT;
    BOOL m_IsSignalDetected;   // TRUE if camera signal is detected
 
 	// Generated message map functions
@@ -176,10 +178,11 @@ public:
 //	CImageExWnd m_ImageWnd2;
 	afx_msg void OnStnClickedViewWnd2();
 private:
-	
+	cv::Mat extractAndResizeCenterView(const cv::Mat& sourceImage);
 public:
 	afx_msg void OnBnClickedCheck1();
 	afx_msg void OnBnClickedDepthCheck();
+	afx_msg void OnBnClickedSuperCheck();
 };
 
 //{{AFX_INSERT_LOCATION}}

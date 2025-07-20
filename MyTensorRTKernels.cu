@@ -81,3 +81,63 @@ void convertHWCtoNCHW(cv::cuda::GpuMat& hwcInput, float* nchwOutput,
         throw std::runtime_error("CUDA kernel error: " + std::string(cudaGetErrorString(err)));
     }
 }
+__global__ void convert_HWC_to_NCHW_and_normalize_kernel(
+    const float* src,
+    size_t src_step,
+    float* dst,
+    int width,
+    int height,
+    float mean_r, float mean_g, float mean_b,
+    float std_r, float std_g, float std_b)
+{
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (x >= width || y >= height) {
+        return;
+    }
+
+    // 1. 正确计算源地址 (HWC)
+    // src_step 是以字节为单位的，所以要先转成 char*
+    const float* p_src_pixel = (const float*)((const char*)src + y * src_step) + x * 3;
+
+    // 2. 读取 RGB 值 (假设输入已经是RGB)
+    float r = p_src_pixel[0];
+    float g = p_src_pixel[1];
+    float b = p_src_pixel[2];
+
+    // 3. 在寄存器中完成标准化
+    r = (r - mean_r) / std_r;
+    g = (g - mean_g) / std_g;
+    b = (b - mean_b) / std_b;
+
+    // 4. 直接写入到目标 NCHW 格式的正确位置
+    size_t channel_offset = (size_t)height * width;
+    dst[y * width + x] = r;                       // 写入 R 通道平面
+    dst[channel_offset + y * width + x] = g;      // 写入 G 通道平面
+    dst[2 * channel_offset + y * width + x] = b;  // 写入 B 通道平面
+}
+
+// C++ 包装函数的实现
+void convert_HWC_to_NCHW_and_normalize(
+    const cv::cuda::GpuMat& src, 
+    float* dst, 
+    int width, 
+    int height, 
+    const float* mean,
+    const float* std,
+    cudaStream_t stream)
+{
+    dim3 block(16, 16); // 线程块大小
+    dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
+
+    convert_HWC_to_NCHW_and_normalize_kernel<<<grid, block, 0, stream>>>(
+        (const float*)src.data,
+        src.step,
+        dst,
+        width,
+        height,
+        mean[0], mean[1], mean[2], // 将mean/std直接作为值传递，效率更高
+        std[0], std[1], std[2]
+    );
+}

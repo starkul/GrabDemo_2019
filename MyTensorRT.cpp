@@ -13,8 +13,16 @@
 void convertHWCtoNCHW(cv::cuda::GpuMat& hwcInput, float* nchwOutput,
     cudaStream_t& stream,
     const float mean[3], const float std[3]);
-
-MyTensorRT::MyTensorRT(const std::string& enginePath, bool enableFP16) : m_enableFP16(enableFP16)
+void convert_HWC_to_NCHW_and_normalize(
+    const cv::cuda::GpuMat& src, // 输入 (HWC)
+    float* dst,                  // 输出 (NCHW)
+    int width,
+    int height,
+    const float* mean,
+    const float* std,
+    cudaStream_t stream
+);
+MyTensorRT::MyTensorRT(const std::string& enginePath, bool enableFP16) :  m_enableFP16(enableFP16)
 {
     try {
         loadEngine(enginePath);
@@ -466,10 +474,20 @@ nvinfer1::Dims MyTensorRT::getOutputDims(int index)
     throw std::out_of_range("Invalid output index");
 }
 
-void MyTensorRT::preprocessImage(const cv::Mat& inputImage)
+void MyTensorRT::preprocessImage_Detect(const cv::Mat& inputImage)
 {
+    cv::Mat processedImage;
+    if (inputImage.channels() == 1) {
+        // 如果输入是单通道灰度图，自动转换为3通道BGR图。
+        cv::cvtColor(inputImage, processedImage, cv::COLOR_GRAY2BGR);
+    }
+    else if (inputImage.channels() == 3) {
+        // 如果输入已经是3通道图，直接使用。
+        // 用 clone() 确保我们有一个独立的副本，避免后续操作意外修改原始数据。
+        processedImage = inputImage.clone();
+    }
     // 保存原始尺寸
-    m_lastPreprocessParams.originalSize = inputImage.size();
+    m_lastPreprocessParams.originalSize = processedImage.size();
     // 1. 获取模型期望的输入维度 (640x640)
     nvinfer1::Dims dims = getInputDims();
     const int modelHeight = dims.d[2];  // 640
@@ -477,10 +495,10 @@ void MyTensorRT::preprocessImage(const cv::Mat& inputImage)
     cv::cuda::GpuMat gpu_input;
     // 1. 上传到GPU
     if (gpu_input.empty()) {
-        gpu_input = cv::cuda::GpuMat(inputImage);
+        gpu_input = cv::cuda::GpuMat(processedImage);
     }
     else {
-        gpu_input.upload(inputImage); // 优化上传操作
+        gpu_input.upload(processedImage); // 优化上传操作
     }
 
     float scale_x = static_cast<float>(modelWidth) / gpu_input.cols;
@@ -551,19 +569,181 @@ void MyTensorRT::preprocessImage(const cv::Mat& inputImage)
     MessageBox(NULL, inputRange, _T("输入验证"), MB_OK);
 #endif
 }
-void MyTensorRT::preprocessImage_Super(const cv::Mat& inputImage)
+void MyTensorRT::preprocessImage_Super(const cv::Mat& lrImage)
 {
+    // 1. 获取模型期望的输入维度 (例如 1x3xH_lrxW_lr)
+    nvinfer1::Dims dims = getInputDims();
+    if (dims.nbDims != 4) {
+        throw std::runtime_error("Super-Resolution model requires a 4D input tensor (NCHW).");
+    }
+    const int modelHeight = dims.d[2];
+    const int modelWidth = dims.d[3];
 
+    // 2. 检查输入图像尺寸是否与模型期望的输入尺寸匹配
+    //    超分模型通常对输入尺寸有严格要求。如果不匹配，可以选择报错或进行缩放/填充。
+    //    这里我们先采用严格的报错策略。
+    if (lrImage.rows != modelHeight || lrImage.cols != modelWidth) {
+        std::string errMsg = "Input image size (" + std::to_string(lrImage.cols) + "x" + std::to_string(lrImage.rows) +
+            ") does not match model's required input size (" + std::to_string(modelWidth) + "x" + std::to_string(modelHeight) + ").";
+        throw std::runtime_error(errMsg);
+    }
+
+    // --- 使用 GPU 加速预处理 ---
+    cv::cuda::GpuMat gpu_input(lrImage);
+
+    // 3. BGR -> RGB
+    cv::cuda::GpuMat gpu_rgb;
+    cv::cuda::cvtColor(gpu_input, gpu_rgb, cv::COLOR_BGR2RGB);
+
+    // 4. uint8 [0, 255] -> float32 [0, 1]
+    cv::cuda::GpuMat gpu_normalized;
+    gpu_rgb.convertTo(gpu_normalized, CV_32FC3, 1.0 / 255.0);
+
+    // 5. HWC -> NCHW (不进行标准化)
+       //    您的核函数调用方式完全符合需求，我们直接复用！
+    const float dummy_mean[3] = { 0.0f, 0.0f, 0.0f };
+    const float dummy_std[3] = { 1.0f, 1.0f, 1.0f };
+
+    // 调用您现有的灵活核函数
+    convertHWCtoNCHW(gpu_normalized, m_inputBuffer, m_stream, dummy_mean, dummy_std);
+    // 如果没有专用核函数，可以手动在CPU完成，但这会慢一些
+    // 参考您的深度估计代码中的CPU部分即可实现
+
+    cudaStreamSynchronize(m_stream);
+}
+/**
+ * @brief (已更新) 专为光场模型设计的预处理函数。
+ *        它接收一张包含 AxA 网格视图的大图，在CPU上完成分割和裁剪，
+ *        然后利用GPU加速后续的格式转换，最终生成模型所需的NCHW输入。
+ * @param nine_grid_image 包含九宫格视图的输入大图 (cv::Mat, BGR格式)。
+ * @param angular_resolution 角度分辨率，对于九宫格就是 3。
+ */
+void MyTensorRT::preprocessImage_LightField(const cv::Mat& nine_grid_image, int angular)
+{
+    // --- 参数检查 ---
+    if (nine_grid_image.empty()) {
+        throw std::runtime_error("Input image is empty.");
+    }
+    if (angular != 3) {
+        throw std::runtime_error("This function is designed for a 3x3 angular grid.");
+    }
+
+    // ====================================================================
+    // 阶段一：在 CPU 上分割、裁剪并进行预处理
+    // ====================================================================
+
+    // 1. 定义模型期望的输入尺寸
+    const int targetHeight = 142;
+    const int targetWidth = 170;
+    const int grid_rows = angular;
+    const int grid_cols = angular;
+
+    // 2. 计算每个子图的理论尺寸
+    const int cell_width = nine_grid_image.cols / grid_cols;
+    const int cell_height = nine_grid_image.rows / grid_rows;
+
+    // 3. 准备一个临时的浮点图像容器
+    // 这个容器将按行主序 (row-major) 存放9个预处理好的patch
+    std::vector<cv::Mat> processed_patches;
+    processed_patches.reserve(angular * angular);
+
+    for (int u = 0; u < grid_rows; ++u) {
+        for (int v = 0; v < grid_cols; ++v) {
+            cv::Rect cell_rect(v * cell_width, u * cell_height, cell_width, cell_height);
+            cv::Mat original_patch = nine_grid_image(cell_rect);
+
+            int startRow = (original_patch.rows - targetHeight) / 2;
+            int startCol = (original_patch.cols - targetWidth) / 2;
+            if (startRow < 0 || startCol < 0) {
+                throw std::runtime_error("Target crop size is larger than the grid cell size.");
+            }
+            cv::Rect center_crop_rect(startCol, startRow, targetWidth, targetHeight);
+
+            // 直接将裁剪出的灰度图存入（假设输入已是灰度图）
+            // .clone() 确保我们得到的是一个独立的Mat副本
+            processed_patches.push_back(original_patch(center_crop_rect).clone());
+        }
+    }
+    // ====================================================================
+    // 阶段二：将9个小图拼接成一张大图 (426x510)
+    // ====================================================================
+
+    // 1. 先将每一行的3个小图水平拼接起来
+    std::vector<cv::Mat> rows_stitched;
+    for (int u = 0; u < grid_rows; ++u) {
+        std::vector<cv::Mat> current_row_patches;
+        for (int v = 0; v < grid_cols; ++v) {
+            current_row_patches.push_back(processed_patches[u * grid_cols + v]);
+        }
+        cv::Mat stitched_row;
+        cv::hconcat(current_row_patches, stitched_row); // 水平拼接
+        rows_stitched.push_back(stitched_row);
+    }
+
+    // 2. 再将拼接好的3行垂直拼接起来，形成最终的大图
+    cv::Mat final_stitched_image;
+    cv::vconcat(rows_stitched, final_stitched_image);
+    // 可选：检查拼接后图像的尺寸是否正确
+    if (final_stitched_image.rows != (targetHeight * angular) || final_stitched_image.cols != (targetWidth * angular)) {
+        throw std::runtime_error("Final stitched image size is incorrect.");
+    }
+
+    // ====================================================================
+    // 阶段三：对最终的大图进行归一化并准备输入Buffer
+    // ====================================================================
+
+    // 1. 类型转换并归一化到 [0, 1]
+    cv::Mat float_image;
+    // 假设输入已经是灰度图，如果不是，需要先转灰度
+    if (final_stitched_image.channels() == 3) {
+        cv::cvtColor(final_stitched_image, final_stitched_image, cv::COLOR_BGR2GRAY);
+    }
+    final_stitched_image.convertTo(float_image, CV_32F, 1.0 / 255.0);
+
+    // 2. 获取模型输入维度并检查
+    nvinfer1::Dims dims = getInputDims();
+    if (dims.nbDims != 4 || dims.d[0] != 1 || dims.d[1] != 1 ||
+        dims.d[2] != (targetHeight * angular) || dims.d[3] != (targetWidth * angular)) {
+        throw std::runtime_error("Warning: Model input dimensions might not match the expected [1, 1, 426, 510] format.");
+    }
+    cv::Mat continuous_float_image = float_image.clone();
+    // 优化：直接从连续的Mat数据区将数据拷贝到GPU，无需中间的CPU vector
+    cudaMemcpyAsync(m_inputBuffer, continuous_float_image.data,
+        continuous_float_image.total() * continuous_float_image.elemSize(),
+        cudaMemcpyHostToDevice, m_stream);
+    //// 3. 将数据拷贝到输入Buffer
+    //std::vector<float> cpu_input_buffer(volume(dims));
+    //// 因为 float_image 是一个完整的、连续的Mat，可以直接拷贝
+    //memcpy(cpu_input_buffer.data(), float_image.data, cpu_input_buffer.size() * sizeof(float));
+
+    //// ====================================================================
+    //// 阶段四：将准备好的数据上传到 GPU
+    //// ====================================================================
+    //
+    //cudaMemcpyAsync(m_inputBuffer, cpu_input_buffer.data(), cpu_input_buffer.size() * sizeof(float), cudaMemcpyHostToDevice, m_stream);
+    cudaStreamSynchronize(m_stream);
 }
 /**
  * @brief 专为深度估计模型设计的预处理函数。
  *        它将输入图像直接缩放、转换颜色空间、归一化，并转换为CHW格式。
  * @param inputImage 输入的原始图像 (OpenCV Mat, BGR格式)。
  */
+
+
 void MyTensorRT::preprocessImage_Depth(const cv::Mat& inputImage)
 {
+    cv::Mat processedImage;
+    if (inputImage.channels() == 1) {
+        // 如果输入是单通道灰度图，自动转换为3通道BGR图。
+        cv::cvtColor(inputImage, processedImage, cv::COLOR_GRAY2BGR);
+    }
+    else if (inputImage.channels() == 3) {
+        // 如果输入已经是3通道图，直接使用。
+        // 用 clone() 确保我们有一个独立的副本，避免后续操作意外修改原始数据。
+        processedImage = inputImage.clone();
+    }
     // 1. 记录原始图像尺寸，用于后处理的放大
-    m_lastOriginalImageSize = inputImage.size();
+    m_lastOriginalImageSize = processedImage.size();
     // 1. 获取模型期望的输入维度 (例如 1x3x518x518)
     nvinfer1::Dims dims = getInputDims();
     if (dims.nbDims != 4) {
@@ -571,54 +751,57 @@ void MyTensorRT::preprocessImage_Depth(const cv::Mat& inputImage)
     }
     const int modelHeight = dims.d[2];
     const int modelWidth = dims.d[3];
-    // 3. 【关键】计算保持宽高比的缩放尺寸
-    int original_w = inputImage.cols;
-    int original_h = inputImage.rows;
 
-    // 计算缩放比例，使得图像能被完整地放入目标框内
+    // 上传图像到 GPU
+    cv::cuda::GpuMat gpu_input;
+    if (gpu_input.empty()) {
+        gpu_input = cv::cuda::GpuMat(processedImage);
+    }
+    else {
+        gpu_input.upload(processedImage);
+    }
+
+    int original_w = gpu_input.cols;
+    int original_h = gpu_input.rows;
+
+    // 3. 【关键】计算保持宽高比的缩放尺寸
     float scale = (std::min)(static_cast<float>(modelWidth) / original_w, static_cast<float>(modelHeight) / original_h);
     int new_w = static_cast<int>(original_w * scale);
     int new_h = static_cast<int>(original_h * scale);
-    
+
     // 4. 按计算出的新尺寸进行【等比例】缩放
-    cv::Mat resized_img;
-    // 使用INTER_CUBIC以精确匹配Python代码
-    cv::resize(inputImage, resized_img, cv::Size(new_w, new_h), 0, 0, cv::INTER_CUBIC);
+    cv::cuda::GpuMat gpu_resized;
+    cv::cuda::resize(gpu_input, gpu_resized, cv::Size(new_w, new_h), 0, 0, cv::INTER_CUBIC);
 
     // 5. 创建一个最终尺寸的黑色“画布” (padding)
-    cv::Mat padded_img(modelHeight, modelWidth, CV_8UC3, cv::Scalar(0, 0, 0));
+    cv::cuda::GpuMat gpu_padded(modelHeight, modelWidth, CV_8UC3, cv::Scalar(0, 0, 0));
 
     // 6. 将等比例缩放后的图像“粘贴”到画布的左上角
-    resized_img.copyTo(padded_img(cv::Rect(0, 0, new_w, new_h)));
+    cv::cuda::GpuMat roi = gpu_padded(cv::Rect(0, 0, new_w, new_h));
+    gpu_resized.copyTo(roi);
 
     // 7. 对【填充后】的完整图像进行后续处理
-    //    (BGR->RGB, 归一化, 减均值/除标准差)
-    cv::Mat rgb_img;
-    cv::cvtColor(padded_img, rgb_img, cv::COLOR_BGR2RGB);
+    //    (BGR->RGB)
+    cv::cuda::GpuMat gpu_rgb;
+    cv::cuda::cvtColor(gpu_padded, gpu_rgb, cv::COLOR_BGR2RGB);
 
-    cv::Mat float_img;
-    rgb_img.convertTo(float_img, CV_32FC3, 1.0 / 255.0);
+    // 8. 归一化并转换为浮点类型
+    cv::cuda::GpuMat gpu_float;
+    gpu_rgb.convertTo(gpu_float, CV_32FC3, 1.0 / 255.0);
 
+    // 9. 标准化 - 使用核函数直接处理
     const float mean[3] = { 0.485f, 0.456f, 0.406f };
     const float std[3] = { 0.229f, 0.224f, 0.225f };
-
-    std::vector<cv::Mat> channels(3);
-    cv::split(float_img, channels);
-
-    channels[0] = (channels[0] - mean[0]) / std[0];
-    channels[1] = (channels[1] - mean[1]) / std[1];
-    channels[2] = (channels[2] - mean[2]) / std[2];
-
-    // 8. 将处理好的通道数据按 CHW 格式拷贝到最终的 CPU 缓冲区
-    std::vector<float> cpu_input_buffer(volume(dims));
-    size_t channel_size = static_cast<size_t>(modelHeight) * modelWidth;
-    memcpy(cpu_input_buffer.data(), channels[0].data, channel_size * sizeof(float));
-    memcpy(cpu_input_buffer.data() + channel_size, channels[1].data, channel_size * sizeof(float));
-    memcpy(cpu_input_buffer.data() + 2 * channel_size, channels[2].data, channel_size * sizeof(float));
-
-    // 9. 将准备好的数据从 CPU 拷贝到 GPU
-    cudaMemcpyAsync(m_inputBuffer, cpu_input_buffer.data(), cpu_input_buffer.size() * sizeof(float), cudaMemcpyHostToDevice, m_stream);
-
+    // 这个函数将替换掉你原来那整个 for 循环
+    convert_HWC_to_NCHW_and_normalize(
+        gpu_float,         // 输入的 GpuMat (CV_32FC3, HWC)
+        m_inputBuffer,     // 最终的输出 buffer (float*, NCHW)
+        modelWidth,
+        modelHeight,
+        mean,
+        std,
+        m_stream
+    );
     cudaStreamSynchronize(m_stream);
 }
 inline float sigmoid(float x) 
@@ -735,8 +918,33 @@ std::vector<Detection> MyTensorRT::postprocessOutputYOLOV8(int batchSize)
 }
 cv::Mat MyTensorRT::postprocessOutput_Super(int batchSize)
 {
-    cv::Mat colored_depth;
-    return colored_depth;
+    if (m_outputDataFP32.empty()) {
+        throw std::runtime_error("Output data is empty. Did you run inference() first?");
+    }
+
+    // 1. 获取输出维度 (例如 1x3xH_hrxW_hr)
+    nvinfer1::Dims outDims = getOutputDims(0);
+    if (outDims.nbDims != 4) {
+        throw std::runtime_error("Expected a 4D output format [N, C, H, W] for the SR map.");
+    }
+    const int outputHeight = outDims.d[2];
+    const int outputWidth = outDims.d[3];
+    // 检查通道数是否为1 (灰度图)
+    const int outputChannels = outDims.d[1];
+    if (outputChannels != 1) {
+        throw std::runtime_error("Expected a single channel (grayscale) output, but got " + std::to_string(outputChannels) + " channels.");
+    }
+    cv::Mat output_image_float(outputHeight, outputWidth, CV_32FC1, m_outputDataFP32.data());
+
+    // 3. 【核心修正】使用 normalize 将网络输出的实际动态范围拉伸到 [0, 255]
+    // 这会自动找到最小值(比如0.332)和最大值(比如0.876)，
+    // 然后将最小值映射为0，最大值映射为255，进行线性拉伸。
+    cv::Mat final_image_uint8;
+    cv::normalize(output_image_float, final_image_uint8, 0, 255, cv::NORM_MINMAX, CV_8U);
+
+    // 因为我们返回的是 final_image_uint8，它有自己的数据拷贝，
+    // 所以不用担心 output_image_float 指向的 m_outputDataFP32 数据在后续被覆盖的问题。
+    return final_image_uint8;
 }
 /**
  * @brief 专为深度估计模型设计的后处理函数。
@@ -968,12 +1176,19 @@ std::string MyTensorRT::getClassName(int classId) const
     }
     return name;  
 }
-
+// 新增方法的实现
+void MyTensorRT::setModelType(ModelType type)
+{
+    m_modelType = type;
+}
 void MyTensorRT::warmup(int numIterations)
 {
     try {
         std::cout << "开始GPU预热..." << std::endl;
-
+        // 检查模型类型是否已设置
+        if (m_modelType == ModelType::Unknown) {
+            throw std::runtime_error("预热失败: 未设置模型类型。请在使用warmup前调用setModelType()。");
+        }
         // 获取模型输入尺寸
         nvinfer1::Dims dims = getInputDims();
         const int modelHeight = dims.d[2];
@@ -981,47 +1196,33 @@ void MyTensorRT::warmup(int numIterations)
 
         // 创建一个空白图像用于预热
         cv::Mat warmupImage = cv::Mat::zeros(modelHeight, modelWidth, CV_8UC3);
-
-        // 执行多次预热迭代
+        //注意：深度估计和目标检测的输入都是三通道的，而光场超分的输入是单通道的
         for (int i = 0; i < numIterations; ++i) {
-            // 预处理
-            preprocessImage(warmupImage);
+            // 使用 switch 根据模型类型调用正确的流程
+            switch (m_modelType) {
+            case ModelType::ObjectDetection_YOLOv8:
+                preprocessImage_Detect(warmupImage);
+                inference(1);
+                postprocessOutputYOLOV8(1);
+                break;
 
-            // 推理
-            inference(1);
+            case ModelType::DepthEstimation_DepthAnything:
+                preprocessImage_Depth(warmupImage);
+                inference(1);
+                postprocessOutput_Depth(1);
+                break;
 
-            // 后处理
-            std::vector<Detection> dummy = postprocessOutputYOLOV8(1);
+            case ModelType::SuperResolution_IINet:
+                // 注意：光场超分的输入尺寸可能与dims不符，我们使用专门的预热图
+                preprocessImage_LightField(warmupImage, 3);
+                inference(1);
+                postprocessOutput_Super(1);
+                break;
 
-            // 确保所有操作完成
-            cudaDeviceSynchronize();
-        }
-        // 执行多次预热迭代
-        for (int i = 0; i < numIterations; ++i) {
-            // 预处理
-            preprocessImage_Depth(warmupImage);
+                // default case 已在函数开头检查，此处可以省略
+            }
 
-            // 推理
-            inference(1);
-
-            // 后处理
-            cv::Mat depth = postprocessOutput_Depth(1);
-
-            // 确保所有操作完成
-            cudaDeviceSynchronize();
-        }
-        // 执行多次预热迭代
-        for (int i = 0; i < numIterations; ++i) {
-            // 预处理
-            preprocessImage_Super(warmupImage);
-
-            // 推理
-            inference(1);
-
-            // 后处理
-            cv::Mat depth = postprocessOutput_Super(1);
-
-            // 确保所有操作完成
+            // 确保所有CUDA操作完成
             cudaDeviceSynchronize();
         }
     }

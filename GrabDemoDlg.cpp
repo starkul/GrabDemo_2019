@@ -111,7 +111,9 @@ static char THIS_FILE[] = __FILE__;
 //cudaError_t addWithCuda(int *c, const int *a, const int *b, unsigned int size);
 
 CGrabDemoDlg *CGrabDemoDlg::m_DlgPointer = NULL; //静态对象指针,需要提前初始化
-MyTensorRT* CGrabDemoDlg::m_tensorRT = nullptr;
+MyTensorRT* CGrabDemoDlg::m_super_tensorRT = nullptr;
+MyTensorRT* CGrabDemoDlg::m_detect_tensorRT = nullptr;
+MyTensorRT* CGrabDemoDlg::m_depth_tensorRT = nullptr;
 unsigned short rImage[1280*1024] = { 0 };   //GPU处理的图像数据
 unsigned short *Image = rImage;
 
@@ -350,6 +352,7 @@ BEGIN_MESSAGE_MAP(CGrabDemoDlg, CDialog)
 	ON_STN_CLICKED(IDC_VIEW_WND2, &CGrabDemoDlg::OnStnClickedViewWnd2)
 	ON_BN_CLICKED(IDC_DETECTION_CHECK, &CGrabDemoDlg::OnBnClickedCheck1)
 	ON_BN_CLICKED(IDC_DEPTH_CHECK, &CGrabDemoDlg::OnBnClickedDepthCheck)
+	ON_BN_CLICKED(IDC_SUPER_CHECK, &CGrabDemoDlg::OnBnClickedSuperCheck)
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
@@ -434,11 +437,18 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 		   mImage[i * Width + j] = rImage[i * Width + j] >> 8;
    // src为原图像，gray为处理后图像，hist为直方图
    Mat gray_host = Mat(Height, Width, CV_8UC1, mImage);
-   Mat flipped_both;
-   // 上下和左右翻转
-   cv::flip(gray_host, flipped_both, -1);
-   gray_host = flipped_both;
+   //Mat flipped_both;
+   //// 上下和左右翻转
+   //cv::flip(gray_host, flipped_both, -1);
+   //gray_host = flipped_both;
+   // 创建一个Mat来存储翻转后的图像
+   Mat flipped_lr; // lr for left-right
 
+   // 进行左右翻转 (flipCode = 1)
+   cv::flip(gray_host, flipped_lr, 1);
+
+   // 更新 gray_host 为翻转后的图像
+   gray_host = flipped_lr;
 
    //Mat gray_host1_2;
 
@@ -463,10 +473,54 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 
    //}
    //这里放拼接（放过了）
+   if (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck())
+   {
+	   cv::Mat gray_host1 = gray_host;
+	   // 1. 调用辅助函数获取放大后的中心视图
+	   cv::Mat super_input = pDlg->extractAndResizeCenterView(gray_host);
 
+	   // 检查函数是否成功返回图像
+	   if (super_input.empty()) {
+		   return; // 如果提取失败，则中止后续操作
+	   }
+	   gray_host = super_input;
+	   // 将原始、清晰的 centerView 送入，你的 TensorRT 类会正确处理缩放
+	   m_super_tensorRT->preprocessImage_LightField(gray_host1, 3);
+	   m_super_tensorRT->inference(1);
+	   // 后处理得到的结果 depth_result 是对应 centerView 尺寸的深度图
+	   cv::Mat super_result = m_super_tensorRT->postprocessOutput_Super(1);
+	   cv::Mat resizedFinalSuperImg;
+	   cv::resize(super_result, resizedFinalSuperImg, cv::Size(Width, Height), 0, 0, cv::INTER_LINEAR);
+	   gray_host = resizedFinalSuperImg;
+   }
+   if (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_DEPTH_CHECK))->GetCheck())
+   {
+	   if (BST_CHECKED != ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck()) {
+		   // 1. 调用辅助函数获取放大后的中心视图
+		   cv::Mat depth_input = pDlg->extractAndResizeCenterView(gray_host);
+
+		   // 检查函数是否成功返回图像
+		   if (depth_input.empty()) {
+			   return; // 如果提取失败，则中止后续操作
+		   }
+		   gray_host = depth_input;
+	   }  
+	   m_depth_tensorRT->preprocessImage_Depth(gray_host);
+	   m_depth_tensorRT->inference(1);
+	   // 后处理得到的结果 depth_result 是对应 centerView 尺寸的深度图
+	   cv::Mat depth_result = m_depth_tensorRT->postprocessOutput_Depth(1);
+
+	   // 更新显示的图像。注意 gray_host 现在会变成彩色图
+	   cv::Mat final_display_img;
+	   cv::cvtColor(depth_result, final_display_img, cv::COLOR_BGR2GRAY);
+	   //// 调整final_display_img的大小为原始图像的大小
+	   cv::Mat resizedFinalDisplayImg;
+	   cv::resize(final_display_img, resizedFinalDisplayImg, cv::Size(Width, Height), 0, 0, cv::INTER_LINEAR);
+	   gray_host = final_display_img;
+   }
    if (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_DETECTION_CHECK))->GetCheck())
    {
-	   // 定义要分割的区域（与MATLAB脚本相同）
+	   /*// 定义要分割的区域（与MATLAB脚本相同）
 	   std::vector<std::vector<int>> regions = {
 		   {1, 150, 1, 170},     // 区域1: 1-150行, 1-170列
 		   {1, 150, 210, 420},   // 区域2: 1-150行, 210-420列
@@ -558,21 +612,25 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 	   // 复制中心视图到结果图像
 	   cv::Rect roi(startCol, startRow, actualWidth, actualHeight);
 	   Mat resultROI = resultImage(roi);
-	   resizedCenterView(cv::Rect(0, 0, actualWidth, actualHeight)).copyTo(resultROI);
+	   resizedCenterView(cv::Rect(0, 0, actualWidth, actualHeight)).copyTo(resultROI);*/
+	   //以上内容为获取到中心区域视角的，计算复杂用以下内容进行替换了
+	   if (BST_CHECKED != ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck()) {
+		   // 1. 调用辅助函数获取放大后的中心视图
+		   cv::Mat detection_input = pDlg->extractAndResizeCenterView(gray_host);
 
-	   // 更新显示的图像
-	   gray_host = resultImage;
-	   DWORD start, end;
-	   DWORD engineProcessTime;
+		   // 检查函数是否成功返回图像
+		   if (detection_input.empty()) {
+			   return; // 如果提取失败，则中止后续操作
+		   }
+		   // 更新显示的图像
+		   gray_host = detection_input;
+	   }
 	   //预处理
-	   start = GetTickCount();
-	   m_tensorRT->preprocessImage(gray_host);
+	   m_detect_tensorRT->preprocessImage_Detect(gray_host);
 	   // 执行推理
-	   m_tensorRT->inference(1);
+	   m_detect_tensorRT->inference(1);
 	   // 后处理
-	   std::vector<Detection> detections = m_tensorRT->postprocessOutputYOLOV8(1);
-	   end = GetTickCount();
-	   engineProcessTime = end - start;
+	   std::vector<Detection> detections = m_detect_tensorRT->postprocessOutputYOLOV8(1);
 
 	   for (const auto& det : detections) {
 		   cv::rectangle(gray_host,
@@ -580,69 +638,13 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 			   cv::Point(det.x + det.width, det.y + det.height),
 			   cv::Scalar(0, 255, 0), 2);
 		   cv::putText(gray_host,
-			   m_tensorRT->getClassName(det.classId) + " " + std::to_string(det.confidence) 
-			   + " delay:" + std::to_string(engineProcessTime),
+			   m_detect_tensorRT->getClassName(det.classId) + " " + std::to_string(det.confidence)
+			   /*+ " delay:" + std::to_string(engineProcessTime)*/,
 			   cv::Point(det.x, det.y - 5),
 			   cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
 	   }
    }
-   if (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_DEPTH_CHECK))->GetCheck())
-   {
-	   // 1. 获取原始图像尺寸
-	   int Width = gray_host.cols;
-	   int Height = gray_host.rows;
 
-	   // 2.【简化】直接定义并提取高质量的中心视图
-	   // 区域5的坐标 (1-based): {171, 350, 210, 420}
-	   int startCol = 210 - 1;
-	   int startRow = 171 - 1;
-	   int roiWidth = (420 - 1) - startCol + 1;
-	   int roiHeight = (350 - 1) - startRow + 1;
-
-	   // 边界检查，防止ROI超出图像范围
-	   if (startCol + roiWidth > Width || startRow + roiHeight > Height) {
-		   // 可以选择报错或调整ROI尺寸
-		   return; // 暂时简单返回
-	   }
-
-	   cv::Rect centerViewROI(startCol, startRow, roiWidth, roiHeight);
-	   // 直接从原始高质量图像中提取ROI，不使用clone()，除非后续会修改gray_host
-	   cv::Mat centerView = gray_host(centerViewROI);
-	   // 创建一个新的Mat对象来存储RGB图像
-	   cv::Mat rgbImage;
-
-	   // 将灰度图像转换为RGB图像
-	   cv::cvtColor(centerView, rgbImage, cv::COLOR_GRAY2BGR);
-	   // 3.【修正】对高质量的中心视图进行推理
-	   DWORD start, end;
-	   DWORD engineProcessTime;
-	   start = GetTickCount();
-
-	   // 将原始、清晰的 centerView 送入，你的 TensorRT 类会正确处理缩放
-	   m_tensorRT->preprocessImage_Depth(rgbImage);
-	   m_tensorRT->inference(1);
-	   // 后处理得到的结果 depth_result 是对应 centerView 尺寸的深度图
-	   cv::Mat depth_result = m_tensorRT->postprocessOutput_Depth(1);
-
-	   end = GetTickCount();
-	   engineProcessTime = end - start;
-
-	   // 4.【修正】正确地显示深度图结果
-	   // 创建一个与原始大图相同尺寸的黑色背景
-	   // 注意：深度图是3通道彩色的(CV_8UC3)，所以背景也应该是3通道
-	   //cv::Mat resultImage = cv::Mat::zeros(Height, Width, CV_8UC3);
-
-	   //// 将计算出的深度图（它和centerView尺寸相同）拷贝回它在原图中的位置
-	   //depth_result.copyTo(resultImage(centerViewROI));
-
-	   // 更新显示的图像。注意 gray_host 现在会变成彩色图
-	   cv::Mat final_display_img;
-	   cv::cvtColor(depth_result, final_display_img, cv::COLOR_BGR2GRAY);
-	   // 调整final_display_img的大小为原始图像的大小
-	   cv::Mat resizedFinalDisplayImg;
-	   cv::resize(final_display_img, resizedFinalDisplayImg, cv::Size(Width, Height), 0, 0, cv::INTER_LINEAR);
-	   gray_host = resizedFinalDisplayImg;
-   }
    unsigned char* rdata;
    rdata = gray_host.ptr<unsigned char>(0);
    for (int i = 0; i < Height; i++)
@@ -761,6 +763,41 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 	  //显示图像
    
    
+}
+//==============================================================================
+// 辅助函数：提取中心视图并将其放大回原始尺寸
+//==============================================================================
+cv::Mat CGrabDemoDlg::extractAndResizeCenterView(const cv::Mat& sourceImage)
+{
+	// 1. 获取原始图像尺寸
+	int originalWidth = sourceImage.cols;
+	int originalHeight = sourceImage.rows;
+
+	// 2. 定义中心视图的ROI坐标
+	// 区域5的坐标 (1-based): {171, 350, 210, 420}
+	int roi_x = 210 - 1;
+	int roi_y = 171 - 1;
+	int roi_width = 420 - roi_x;
+	int roi_height = 350 - roi_y;
+
+	// 3. 边界检查，防止ROI超出图像范围
+	if (roi_x < 0 || roi_y < 0 ||
+		roi_x + roi_width > originalWidth || roi_y + roi_height > originalHeight)
+	{
+		// 如果ROI无效，可以报错或返回一个空Mat
+		AfxMessageBox(_T("Center ROI is out of image bounds!"));
+		return cv::Mat(); // 返回一个空Mat，调用者需要检查
+	}
+
+	// 4. 提取中心视图
+	cv::Rect centerViewROI(roi_x, roi_y, roi_width, roi_height);
+	cv::Mat centerView = sourceImage(centerViewROI);
+
+	// 5. 将中心视图放大回原始尺寸并返回
+	cv::Mat resizedView;
+	cv::resize(centerView, resizedView, cv::Size(originalWidth, originalHeight), 0, 0, cv::INTER_LINEAR);
+
+	return resizedView;
 }
 //畸变矫正
 void CGrabDemoDlg::localEnlarge(int Height, int Width)
@@ -946,15 +983,71 @@ BOOL CGrabDemoDlg::OnInitDialog()
 
 	   size_t pos = strExePath.find_last_of("\\/");
 	   std::string exeDir = (pos != std::string::npos) ? strExePath.substr(0, pos) : "";
+	   std::string detect_enginePath = exeDir + "\\yolov8.engine";
+	   std::string depth_enginePath = exeDir + "\\depth_anything_v2_vits_518x616.engine";
+	   std::string super_enginePath = exeDir + "\\IINet_scale2_142x170.engine";
+	   m_super_tensorRT = new MyTensorRT(super_enginePath, true);
+	   m_depth_tensorRT = new MyTensorRT(depth_enginePath, true);
+	   m_detect_tensorRT = new MyTensorRT(detect_enginePath, true);
+	   //// 如果你正在测试超分模型:
+	   m_super_tensorRT->setModelType(ModelType::SuperResolution_IINet);
+	   m_depth_tensorRT->setModelType(ModelType::DepthEstimation_DepthAnything);
+	   m_detect_tensorRT->setModelType(ModelType::ObjectDetection_YOLOv8);
+	   ////gpu 预热
+	   m_super_tensorRT->warmup(5);
+	   m_depth_tensorRT->warmup(5);
+	   m_detect_tensorRT->warmup(5);
+	   // --- 超分辨率的推理流程 ---
+       // 1. 加载一张低分辨率的测试图片
+       // 注意：这张图片的尺寸必须严格符合模型输入的 H 和 W
+	   // cv::Mat lr_image = cv::imread(exeDir + "\\001_2.png" , cv::IMREAD_GRAYSCALE);
 
-	   std::string enginePath = exeDir + "\\depth_anything_v2_vits_518x616.engine";
-	   m_tensorRT = new MyTensorRT(enginePath, true);
+	   //DWORD start, end;
+	   //DWORD processTime;
 
-	   //gpu 预热
-	   //gpu 预热
-	   m_tensorRT->warmup(5);
-	   ////TODO本地文件测试，正式使用以下屏蔽
-	   //cv::Mat testMat = cv::imread(exeDir + "\\001_7.png");
+	   //start = GetTickCount();
+
+	   //// 2. 预处理 (调用超分专用的函数)
+	   //m_super_tensorRT->preprocessImage_LightField(lr_image,3);
+
+	   //// 3. 执行推理 (复用通用的推理函数)
+	   //m_super_tensorRT->inference(1);
+
+	   //// 4. 后处理 (调用超分专用的函数)
+	   //cv::Mat sr_result = m_super_tensorRT->postprocessOutput_Super(1);
+	   //m_depth_tensorRT->preprocessImage_Depth(sr_result);
+
+	   //// 2. 执行推理 (复用通用的推理函数)
+	   //m_depth_tensorRT->inference(1);
+
+	   //// 3. 后处理 (调用新增的深度专用函数)
+	   //cv::Mat depth_result = m_depth_tensorRT->postprocessOutput_Depth(1);
+	   //end = GetTickCount();
+	   //processTime = end - start;
+
+	   ////// 显示结果
+	   //CString msg;
+	   //msg.Format(_T("深度估计完成, 花费时间 %d 毫秒"), processTime);
+	   //MessageBox(msg, _T("处理结果"), MB_OK | MB_ICONINFORMATION);
+	   //cv::Mat final_display_img;
+	   //cv::cvtColor(depth_result, final_display_img, cv::COLOR_BGR2GRAY);
+	   //// 在窗口中显示原始图像和深度图
+	   //cv::imshow("Original Image", sr_result);
+	   //cv::imshow("Depth Result", final_display_img);
+	   //cv::waitKey(0); // 等待按键后关闭窗口
+	   // 
+	   //// 5. 显示和保存结果
+	   //CString msg;
+	   //msg.Format(_T("超分辨率完成, 花费时间 %d 毫秒"), processTime);
+	   //MessageBox(msg, _T("处理结果"), MB_OK | MB_ICONINFORMATION);
+
+	   //// 在窗口中显示输入的低分辨率图和输出的高分辨率图
+	   //cv::imshow("Low-Resolution Input", lr_image);
+	   //cv::imshow("Super-Resolution Result", sr_result);
+	   //cv::waitKey(0); // 等待按键后关闭窗口
+	   // 
+	   //TODO 深度估计本地文件测试，正式使用以下屏蔽
+	   //cv::Mat testMat = cv::imread(exeDir + "\\001_8.png");
 	   //DWORD start, end;
 	   //DWORD processTime;
 
@@ -983,8 +1076,8 @@ BOOL CGrabDemoDlg::OnInitDialog()
 	   //cv::imshow("Original Image", testMat);
 	   //cv::imshow("Depth Result", final_display_img);
 	   //cv::waitKey(0); // 等待按键后关闭窗口
-	   //TODO本地文件测试，正式使用以下屏蔽
-	   //cv::Mat testMat = cv::imread(exeDir + "\\001_6.png");
+	   //TODOYOLOv8本地文件测试，正式使用以下屏蔽
+	   //cv::Mat testMat = cv::imread(exeDir + "\\001_7.png" , cv::IMREAD_GRAYSCALE);
 	   //DWORD start, end;
 	   //DWORD engineProcessTime;
 	   ////预处理
@@ -3145,6 +3238,12 @@ void CGrabDemoDlg::OnBnClickedCheck1()
 
 
 void CGrabDemoDlg::OnBnClickedDepthCheck()
+{
+	// TODO: 在此添加控件通知处理程序代码
+}
+
+
+void CGrabDemoDlg::OnBnClickedSuperCheck()
 {
 	// TODO: 在此添加控件通知处理程序代码
 }

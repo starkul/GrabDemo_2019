@@ -23,18 +23,25 @@ struct PreprocessParams {
     float scaleRatio;         // 缩放比例
     cv::Point paddingOffset;  // 填充偏移量
 };
-
+enum class ModelType {
+    Unknown,
+    SuperResolution_IINet,
+    DepthEstimation_DepthAnything,
+    ObjectDetection_YOLOv8
+};
 class MyTensorRT
 {
 public:
     MyTensorRT(const std::string& enginePath, bool enableFP16 = false);
     ~MyTensorRT();
+    // 新增：设置当前模型类型的公共方法
+    void setModelType(ModelType type);
     void inference(int batchSize = 1);
     void saveEngine(const std::string& path);
     nvinfer1::DataType getInputDataType() const;
     nvinfer1::Dims  getInputDims();
     nvinfer1::Dims getOutputDims(int index);
-    void preprocessImage(const cv::Mat& inputImage);
+    void preprocessImage_Detect(const cv::Mat& inputImage);
     std::vector<Detection> postprocessOutput(int batchSize);
     std::vector<Detection> postprocessOutputYOLOV8(int batchSize);
     std::string getClassName(int classId) const;
@@ -53,7 +60,7 @@ public:
     // ===================================================
     void preprocessImage_Super(const cv::Mat& inputImage);
     cv::Mat postprocessOutput_Super(int batchSize);
-
+    void preprocessImage_LightField(const cv::Mat& nine_grid_image, int angular_resolution);
 private:
     void loadEngine(const std::string& path);
     void setupMemory();
@@ -61,6 +68,7 @@ private:
     std::vector<Detection> applyNMS(const std::vector<Detection>& candidates, float iouThreshold);
     float calculateIOU(const Detection& a, const Detection& b);
     void validateMemoryAccess();
+    int m_upscaleFactor;
 private:
     nvinfer1::IRuntime* m_runtime = nullptr;
     nvinfer1::ICudaEngine* m_engine = nullptr;
@@ -77,6 +85,7 @@ private:
     std::vector<float> m_outputDataFP32;
     std::vector<const char*> m_inputNames;   // 输入张量名称
     std::vector<const char*> m_outputNames;  // 输出张量名称
+    ModelType m_modelType; // 记录自己的模型类型
     // GPU加速预处理相关
     /*cv::cuda::GpuMat    m_gpu_input;
     cv::cuda::GpuMat    m_gpu_resized;
