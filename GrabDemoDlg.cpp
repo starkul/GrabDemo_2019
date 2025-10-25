@@ -1,4 +1,4 @@
-// GrabDemoDlg.cpp : implementation file
+ï»¿// GrabDemoDlg.cpp : implementation file
 //
 
 #include "stdafx.h"
@@ -9,27 +9,27 @@
 #include <stdio.h>  
 #include "GrabDemo.h"
 #include "GrabDemoDlg.h"
-
+#include "DistortionCailbration.h"
 #include "math.h"
 
 //#include "cuda_runtime.h"  
 //#include "device_launch_parameters.h"  
 //#include <opencv2/>
 
-// GPU Í·ÎÄ¼ş
+// GPU å¤´æ–‡ä»¶
 #include "cuda_runtime.h"  
 #include "device_launch_parameters.h"  
 
-// ÓëÏÂÎ»»úÍ¨ĞÅ
+// ä¸ä¸‹ä½æœºé€šä¿¡
 #include "IRCMD_COM/SerialThread.h"
 #include "IRCMD_COM/ComFrame.h"
 
 
-// I2CÍ¨ĞÅexe·şÎñÍ·ÎÄ¼ş
-#include "E:\INLF\QZB\´®¿ÚÍ¨ĞÅ\USB×ªI2CÍ¨ĞÅ\ATL_test\ATLCOMProject\ATLCOMProject\ATLCOMProject_i.h"
-#include "E:\INLF\QZB\´®¿ÚÍ¨ĞÅ\USB×ªI2CÍ¨ĞÅ\ATL_test\ATLCOMProject\ATLCOMProject\ATLCOMProject_i.c"
+// I2Cé€šä¿¡exeæœåŠ¡å¤´æ–‡ä»¶
+#include "E:\INLF\QZB\ä¸²å£é€šä¿¡\USBè½¬I2Cé€šä¿¡\ATL_test\ATLCOMProject\ATLCOMProject\ATLCOMProject_i.h"
+#include "E:\INLF\QZB\ä¸²å£é€šä¿¡\USBè½¬I2Cé€šä¿¡\ATL_test\ATLCOMProject\ATLCOMProject\ATLCOMProject_i.c"
 
-//  Float32 ×ª float16
+//  Float32 è½¬ float16
 #include "Float32_16.h"
 
 using namespace cv;
@@ -106,82 +106,87 @@ using namespace std;
 static char THIS_FILE[] = __FILE__;
 #endif
 
-//// GPU º¯ÊıÉùÃ÷
+//// GPU å‡½æ•°å£°æ˜
 //extern "C"
 //cudaError_t addWithCuda(int *c, const int *a, const int *b, unsigned int size);
 
-CGrabDemoDlg *CGrabDemoDlg::m_DlgPointer = NULL; //¾²Ì¬¶ÔÏóÖ¸Õë,ĞèÒªÌáÇ°³õÊ¼»¯
+CGrabDemoDlg *CGrabDemoDlg::m_DlgPointer = NULL; //é™æ€å¯¹è±¡æŒ‡é’ˆ,éœ€è¦æå‰åˆå§‹åŒ–
 MyTensorRT* CGrabDemoDlg::m_super_tensorRT = nullptr;
 MyTensorRT* CGrabDemoDlg::m_detect_tensorRT = nullptr;
 MyTensorRT* CGrabDemoDlg::m_depth_tensorRT = nullptr;
-unsigned short rImage[1280*1024] = { 0 };   //GPU´¦ÀíµÄÍ¼ÏñÊı¾İ
+MyTensorRT* CGrabDemoDlg::m_track_tensorRT = nullptr;
+
+unsigned short rImage[1280*1024] = { 0 };   //GPUå¤„ç†çš„å›¾åƒæ•°æ®
 unsigned short *Image = rImage;
 
-unsigned char rImage_uchar[1280 * 1024] = { 0 };   //GPU´¦ÀíµÄÍ¼ÏñÊı¾İ
+unsigned char rImage_uchar[1280 * 1024] = { 0 };   //GPUå¤„ç†çš„å›¾åƒæ•°æ®
 unsigned char *Image_uchar = rImage_uchar;
 
-unsigned char mImage[640 * 512] = { 0 };   //¾Ö²¿·Å´óµÄÍ¼ÏñÊı¾İ
+unsigned char saiImage[179 * 210] = { 0 };
+unsigned char *saiimage = saiImage;
+
+unsigned char mImage[640 * 512] = { 0 };   //å±€éƒ¨æ”¾å¤§çš„å›¾åƒæ•°æ®
 unsigned char *mimage = mImage;
 
-unsigned int rHistogram[65536] = {0};  //ÓÃÓÚCPU´¦ÀíÖ±·½Í¼
+unsigned int rHistogram[65536] = {0};  //ç”¨äºCPUå¤„ç†ç›´æ–¹å›¾
 unsigned int *Histogram = rHistogram;
-float rHistogram_Float[65536] = { 0 };  //ÓÃÓÚCPU´¦ÀíÖ±·½Í¼
+float rHistogram_Float[65536] = { 0 };  //ç”¨äºCPUå¤„ç†ç›´æ–¹å›¾
 float *Histogram_Float = rHistogram_Float;
 
-unsigned short rCold_Ram[1280 * 1024] = { 0 };   //µÍÎÂ±¾µ×µÄÍ¼ÏñÊı¾İ
+unsigned short rCold_Ram[1280 * 1024] = { 0 };   //ä½æ¸©æœ¬åº•çš„å›¾åƒæ•°æ®
 unsigned short *Cold_Ram = rCold_Ram;
 
-unsigned short rHot_Ram[1280 * 1024] = { 20000 };   //¸ßÎÂ±¾µ×µÄÍ¼ÏñÊı¾İ
+unsigned short rHot_Ram[1280 * 1024] = { 20000 };   //é«˜æ¸©æœ¬åº•çš„å›¾åƒæ•°æ®
 unsigned short *Hot_Ram = rHot_Ram;
 
-float rTP_Gain[1280 * 1024] = { 0 };		//Á½µã½ÃÕıµÄ¸÷¸öÏñËØÔöÒæ
+float rTP_Gain[1280 * 1024] = { 0 };		//ä¸¤ç‚¹çŸ«æ­£çš„å„ä¸ªåƒç´ å¢ç›Š
 float *TP_Gain = rTP_Gain;
 
-float rTP_Bias[1280 * 1024] = { 0 };   //Á½µã½ÃÕıµÄ¸÷¸öÏñËØÆ«ÒÆ
+float rTP_Bias[1280 * 1024] = { 0 };   //ä¸¤ç‚¹çŸ«æ­£çš„å„ä¸ªåƒç´ åç§»
 float *TP_Bias = rTP_Bias; 
 
-unsigned short rBlind_Ram[1280 * 1024] = { 0 };   //Ã¤Ôª½ÃÕı±í
+unsigned short rBlind_Ram[1280 * 1024] = { 0 };   //ç›²å…ƒçŸ«æ­£è¡¨
 unsigned short *pBlind_Ram = rBlind_Ram;
 
-//--------³õÊ¼»¯GPU Ö¸Õë -----------
-unsigned short *dev_img = 0;   //GPU Í¼ÏñÖ¸Õë
-float *dev_pTP_Gain = 0, *dev_pTP_Bias = 0; //GPU Á½µã½ÃÕıÔöÒæºÍÆ«ÒÆ
-unsigned short *dev_pBlind_Ram = 0;  //GPU Ã¤Ôª½ÃÕı±í
-unsigned int *dev_Histogram = 0;   //GPU Ö±·½Í¼¾ùºâ
-float *dev_Histogram_float = 0; //GPU Ö±·½Í¼¾ùºâ
+//--------åˆå§‹åŒ–GPU æŒ‡é’ˆ -----------
+unsigned short *dev_img = 0;   //GPU å›¾åƒæŒ‡é’ˆ
+float *dev_pTP_Gain = 0, *dev_pTP_Bias = 0; //GPU ä¸¤ç‚¹çŸ«æ­£å¢ç›Šå’Œåç§»
+unsigned short *dev_pBlind_Ram = 0;  //GPU ç›²å…ƒçŸ«æ­£è¡¨
+unsigned int *dev_Histogram = 0;   //GPU ç›´æ–¹å›¾å‡è¡¡
+float *dev_Histogram_float = 0; //GPU ç›´æ–¹å›¾å‡è¡¡
 
-//-------------NETD²âÁ¿±äÁ¿-------------
+//-------------NETDæµ‹é‡å˜é‡-------------
 long Death_num = 0; long Hot_num = 0;
-int NETD_frames = 50;   //ÅäÖÃ²ÎÊı
+int NETD_frames = 50;   //é…ç½®å‚æ•°
 int NETD_K = 1; 
-float T0 = 20; float T = 35;  // NETD: µÚÒ»´Î²É¼¯µÄÎÂ¶È  µÚ¶ş´Î²É¼¯µÄÎÂ¶È
+float T0 = 20; float T = 35;  // NETD: ç¬¬ä¸€æ¬¡é‡‡é›†çš„æ¸©åº¦  ç¬¬äºŒæ¬¡é‡‡é›†çš„æ¸©åº¦
 
-int Flag_NETD = 0;   //ÊÇ·ñÖ´ĞĞNETD²âÁ¿
+int Flag_NETD = 0;   //æ˜¯å¦æ‰§è¡ŒNETDæµ‹é‡
 float NETD_Vt[1280 * 1024] = { 0 };   //NETD
 float NETD_Vt0[1280 * 1024] = { 0 };   //NETD
 float NETD_Vn[1280 * 1024][50] = { 0 };   //NETD
-float NETD_VnA[1280 * 1024] = { 0 };   //NETD Æ½¾ùÔëÉùÖµ
-int current = 0;  //±íÊ¾µ±Ç°¶ÁÈ¡µÄÍ¼ÏñÖ¡Êı
+float NETD_VnA[1280 * 1024] = { 0 };   //NETD å¹³å‡å™ªå£°å€¼
+int current = 0;  //è¡¨ç¤ºå½“å‰è¯»å–çš„å›¾åƒå¸§æ•°
 
-int frame_count;  // ÓÃÓÚ¼ÇÂ¼Ö¡Æµ£ºÃ¿Ãë¼ÆÊı 
+int frame_count;  // ç”¨äºè®°å½•å¸§é¢‘ï¼šæ¯ç§’è®¡æ•° 
 
-//ÏÂÎ»»úÍ¨ĞÅÓÃµÄÊı¾İÀàĞÍ×ª»»»º´æÆ÷
+//ä¸‹ä½æœºé€šä¿¡ç”¨çš„æ•°æ®ç±»å‹è½¬æ¢ç¼“å­˜å™¨
 unsigned char parameters[1024 * 1280 * 4 ];
-unsigned char transfer_data[6]; //´°¿ÚÊı¾İ
+unsigned char transfer_data[6]; //çª—å£æ•°æ®
 //int NETD_Vt = 0; int NETD_Vt0 = 0; int NETD_Vn = 0;
 //-------------------------------------------------
 
-//-----------´®¿Ú³¬Ê±ÖØ´«Ê±¼ä¼ä¸ô--------------
+//-----------ä¸²å£è¶…æ—¶é‡ä¼ æ—¶é—´é—´éš”--------------
 unsigned int Serial_Delay_Time = 10000;  //  xxx ms
 cudaError_t cudaStatus;
 
-//float rHistogram_Enhancement[65536] = { 0 };   //Ö±·½Í¼ÔöÇ¿±í
+//float rHistogram_Enhancement[65536] = { 0 };   //ç›´æ–¹å›¾å¢å¼ºè¡¨
 //float *pHistogram_Enhancement = rHistogram_Enhancement;
 
 int N_Saved_Frames = 0;
 int Current_Saved = 0;
-//------------------ÏÂÎ»»úÍ¨ĞÅ²¿·Ö³õÊ¼»¯---------
-// ´®¿Ú×´Ì¬ £º ´ò¿ª£º1
+//------------------ä¸‹ä½æœºé€šä¿¡éƒ¨åˆ†åˆå§‹åŒ–---------
+// ä¸²å£çŠ¶æ€ ï¼š æ‰“å¼€ï¼š1
 bool m_ComPortFlag = 0;
 SerialThread st;
 
@@ -249,13 +254,76 @@ CGrabDemoDlg::CGrabDemoDlg(CWnd* pParent /*=NULL*/)
    m_Xfer				= NULL;
    m_View            = NULL;
    //m_ViewProcessed = NULL;
-   m_DlgPointer = this; //¶ÔÏóÖ¸Õë£¬¹¹Ôìº¯ÊıÊ½Ö¸Ïòthis
-   //m_cstrWorkPath = "H:\\QZB\\Sapera\\Demos\\Classes\\Vc\\GrabDemo\\Data"; //¶¨ÒåÊı¾İ´æ´¢Î»ÖÃ
-   //m_cstrWorkPath = "H:\\QZB\\Sapera\\Demos\\Classes\\Vc\\subData"; //¶¨ÒåÊı¾İ´æ´¢Î»ÖÃ
-   m_cstrWorkPath = "E:\\INLF\\QZB\\Sapera\\Demos\\Classes\\Vc\\Raw20241112";//
+   m_DlgPointer = this; //å¯¹è±¡æŒ‡é’ˆï¼Œæ„é€ å‡½æ•°å¼æŒ‡å‘this
+   //m_cstrWorkPath = "H:\\QZB\\Sapera\\Demos\\Classes\\Vc\\GrabDemo\\Data"; //å®šä¹‰æ•°æ®å­˜å‚¨ä½ç½®
+   //m_cstrWorkPath = "H:\\QZB\\Sapera\\Demos\\Classes\\Vc\\subData"; //å®šä¹‰æ•°æ®å­˜å‚¨ä½ç½®
+
+   m_cstrWorkPath = "E:\\INLF\\QZB\\Sapera\\Demos\\Classes\\Vc\\cstrWorksavepath";//
    m_IsSignalDetected = TRUE;
 
 }
+
+void CGrabDemoDlg::UpdateSavePath()//æ›´æ–°ä¿å­˜è·¯å¾„
+{
+	CString basePath = "E:\\INLF\\QZB\\Sapera\\Demos\\Classes\\Vc\\cstrWorksavepath"; // åŸºç¡€è·¯å¾„
+
+	// è·å–å¤©æ°”é€‰æ‹©ï¼ˆå‡è®¾ m_comboBox æ˜¯ IDC_COMBO_WEATHERï¼‰
+	int sel = m_comboBox.GetCurSel();
+	CString weather = _T("Normal");
+	if (sel == 0) weather = _T("Normal");
+	else if (sel == 1) weather = _T("Cloud");
+	else if (sel == 2) weather = _T("Fog");
+	else if (sel == 3) weather = _T("Rain");
+	else if (sel == 4) weather = _T("Smoke");
+
+	// å¼€å§‹æ„å»ºè·¯å¾„
+	CString path = basePath + "\\" + weather;
+
+	CButton* pBtn_DEPTH = (CButton*)GetDlgItem(IDC_DEPTH_CHECK);
+    CButton* pBtn_SUPER = (CButton*)GetDlgItem(IDC_SUPER_CHECK);
+    CButton* pBtn_DETECTION = (CButton*)GetDlgItem(IDC_DETECTION_CHECK);
+	CButton* pBtn_DC= (CButton*)GetDlgItem(IDC_Local_Enlarge);
+
+
+	if (pBtn_SUPER && pBtn_SUPER->GetCheck() == BST_CHECKED)
+	{
+		if (pBtn_DEPTH && pBtn_DEPTH->GetCheck() == BST_CHECKED)
+		{
+            path += _T("\\Depth");
+		}
+		else
+		{
+            path += _T("\\SuperResolution");
+		}
+	}
+	else if (pBtn_DETECTION && pBtn_DETECTION->GetCheck() == BST_CHECKED)
+	{
+		path += _T("\\Detection");
+	}
+	else
+	{
+		if (pBtn_DC && pBtn_DC->GetCheck() == BST_CHECKED)
+		{
+			path += _T("\\DistortionCailbration");
+		}
+		else
+		{
+			path += _T("\\Normal");
+		}
+	}
+
+	// æ›´æ–°æˆå‘˜å˜é‡
+	m_cstrWorkPath = path;
+	if (!PathFileExists(m_cstrWorkPath))
+	{
+		if (SHCreateDirectoryEx(NULL, m_cstrWorkPath, NULL) != ERROR_SUCCESS)
+		{
+			AfxMessageBox(_T("æ— æ³•åˆ›å»ºä¿å­˜è·¯å¾„ï¼Œè¯·æ£€æŸ¥ç£ç›˜æƒé™æˆ–è·¯å¾„æ˜¯å¦æœ‰æ•ˆï¼š\n") + m_cstrWorkPath);
+		}
+	}
+	AfxMessageBox(_T("ä¿å­˜è·¯å¾„å·²æ›´æ–°ï¼š\n") + m_cstrWorkPath);
+}
+
 
 void CGrabDemoDlg::DoDataExchange(CDataExchange* pDX)
 {
@@ -263,7 +331,7 @@ void CGrabDemoDlg::DoDataExchange(CDataExchange* pDX)
 	//{{AFX_DATA_MAP(CGrabDemoDlg)
 	DDX_Control(pDX, IDC_STATUS, m_statusWnd);
 	DDX_Control(pDX, IDC_VIEW_WND, m_ImageWnd);
-	DDX_Text(pDX, IDC_BUFFER_FRAME_RATE, m_BufferFrameRate);  // »ñÈ¡Ö¡ÆµÊıÁ¿
+	DDX_Text(pDX, IDC_BUFFER_FRAME_RATE, m_BufferFrameRate);  // è·å–å¸§é¢‘æ•°é‡
 															  //}}AFX_DATA_MAP
 	DDV_MinMaxFloat(pDX, m_BufferFrameRate, 0, 9999);
 	DDX_Control(pDX, IDC_GPU, GPU_State);
@@ -281,6 +349,7 @@ void CGrabDemoDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, I2C_TImeSet, Combe_I2C_TimeSet);
 	DDX_Control(pDX, PC_bilateralFilter, PC_BilateralFilter);
 	//  DDX_Control(pDX, IDC_VIEW_WND2, m_ImageWnd2);
+	DDX_Control(pDX, IDC_COMBO1, m_comboBox);
 }
 
 BEGIN_MESSAGE_MAP(CGrabDemoDlg, CDialog)
@@ -312,7 +381,7 @@ BEGIN_MESSAGE_MAP(CGrabDemoDlg, CDialog)
 	ON_BN_CLICKED(IDC_SaveMulti, &CGrabDemoDlg::OnBnClickedSavemulti)
 
 	ON_BN_CLICKED(IDC_Save_Timing, &CGrabDemoDlg::OnBnClickedSaveTiming)
-	ON_WM_TIMER()  //Ìí¼Ó¶¨Ê±Æ÷ĞèÒª
+	ON_WM_TIMER()  //æ·»åŠ å®šæ—¶å™¨éœ€è¦
 	ON_BN_CLICKED(IDC_Timing_Stop, &CGrabDemoDlg::OnBnClickedTimingStop)
 
 	ON_BN_CLICKED(IDC_TP_Cold, &CGrabDemoDlg::OnBnClickedTpCold)
@@ -328,7 +397,7 @@ BEGIN_MESSAGE_MAP(CGrabDemoDlg, CDialog)
 	ON_BN_CLICKED(FPGA_Close, &CGrabDemoDlg::OnBnClickedClose)
 	ON_BN_CLICKED(FPGA_HE, &CGrabDemoDlg::OnBnClickedHe)
 
-	ON_MESSAGE(ON_COM_RXCHAR, SerialRead)   //´®¿Ú½ÓÊÕÏìÓ¦Ó³Éä
+	ON_MESSAGE(ON_COM_RXCHAR, SerialRead)   //ä¸²å£æ¥æ”¶å“åº”æ˜ å°„
 	ON_BN_CLICKED(FPGA_GetHigh, &CGrabDemoDlg::OnBnClickedGethigh)
 	ON_BN_CLICKED(FPGA_Blind_Correction, &CGrabDemoDlg::OnBnClickedBlindCorrection)
 	ON_BN_CLICKED(FPGA_TP_Correction, &CGrabDemoDlg::OnBnClickedTpCorrection)
@@ -353,6 +422,9 @@ BEGIN_MESSAGE_MAP(CGrabDemoDlg, CDialog)
 	ON_BN_CLICKED(IDC_DETECTION_CHECK, &CGrabDemoDlg::OnBnClickedCheck1)
 	ON_BN_CLICKED(IDC_DEPTH_CHECK, &CGrabDemoDlg::OnBnClickedDepthCheck)
 	ON_BN_CLICKED(IDC_SUPER_CHECK, &CGrabDemoDlg::OnBnClickedSuperCheck)
+	ON_CBN_SELCHANGE(IDC_COMBO1, &CGrabDemoDlg::OnCbnSelchangeCombo1)
+	ON_BN_CLICKED(IDC_TRACK_CHECK, &CGrabDemoDlg::OnBnClickedTrackCheck)
+	ON_EN_CHANGE(FPGA_frames, &CGrabDemoDlg::OnEnChangeframes)
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
@@ -362,22 +434,22 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 {
    CGrabDemoDlg *pDlg= (CGrabDemoDlg *) pInfo->GetContext();
 
-   //___________________Ìí¼Ó´¦ÀíÍ¼Ïñº¯Êı______________
-   int Height = m_DlgPointer->m_Buffers->GetHeight();//»ñÈ¡µ±Ç°Í¼Ïñ´óĞ¡  768
+   //___________________æ·»åŠ å¤„ç†å›¾åƒå‡½æ•°______________
+   int Height = m_DlgPointer->m_Buffers->GetHeight();//è·å–å½“å‰å›¾åƒå¤§å°  768
    int Width = m_DlgPointer->m_Buffers->GetWidth();   //1024
    int Pixel_Depth = m_DlgPointer->m_Buffers->GetPixelDepth();
    CString cs;
-   //µ¯´°Êä³ö×Ö·û´®
+   //å¼¹çª—è¾“å‡ºå­—ç¬¦ä¸²
 
-   //-------------------ÏÔÊ¾Ö¡Æµ------------------
+   //-------------------æ˜¾ç¤ºå¸§é¢‘------------------
    //SapXferFrameRateInfo* pFrames;
    //pFrames = m_DlgPointer->m_Xfer->GetFrameRateStatistics();
    //float current_frames;
    //current_frames = pFrames->GetBufferFrameRate();
 
-   frame_count++;  // Ö¡Æµ¼ÆÊı¼Ó1
+   frame_count++;  // å¸§é¢‘è®¡æ•°åŠ 1
    //char   str[10];
-			//				// double   x=   atof(jidian)   ;//×ª»»³É¸¡µãÊı
+			//				// double   x=   atof(jidian)   ;//è½¬æ¢æˆæµ®ç‚¹æ•°
    //int num = MultiByteToWideChar(0, 0, str, -1, NULL, 0);
    //wchar_t *wide = new wchar_t[num];
    //MultiByteToWideChar(0, 0, str, -1, wide, num);
@@ -388,32 +460,32 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
    //pDlg->MessageBox(cs);
    
  
-   //---------¶ÁÈ¡Í¼Ïñ£¬±£´æÎªImage£¨768*1024£©max 
+   //---------è¯»å–å›¾åƒï¼Œä¿å­˜ä¸ºImageï¼ˆ768*1024ï¼‰max 
    //BOOL ReadRect(int index, int x, int y, int width, int height, void* pData);
    m_DlgPointer->m_Buffers->ReadRect(0, 0, Width, Height, Image);
- /*  //------------Í¼Ïñ´¦ÀíËã·¨²âÊÔ´úÂë---------
-   // ×Ô¶¨ÒåÍ¼Ïñ
+ /*  //------------å›¾åƒå¤„ç†ç®—æ³•æµ‹è¯•ä»£ç ---------
+   // è‡ªå®šä¹‰å›¾åƒ
    for (int i = 0; i < 768; i++)
 	   for (int j = 0; j < 1024; j++)
 		   Image[j + i * 1024] = 40000;
-   //------Á½µã½ÃÕı²âÊÔ------
+   //------ä¸¤ç‚¹çŸ«æ­£æµ‹è¯•------
    for (int i = 0; i < 50; i++)
 	   for (int j = 0; j < 50; j++)
 		   Image[j + i * 1024] = 20000;
 
-   //-------Ã¤Ôª²âÊÔ-----
+   //-------ç›²å…ƒæµ‹è¯•-----
    for (int i = 700; i < 768; i = i + 3)
 	   for (int j = 980; j < 1024; j = j + 3)
 		   Image[j + i * 1024] = 0;
 */
-   // Í¼Ïñ´¦Àí¹¦ÄÜÑ¡ÔñÇé¿ö
+   // å›¾åƒå¤„ç†åŠŸèƒ½é€‰æ‹©æƒ…å†µ
    int TP_On = ((CButton*)m_DlgPointer->GetDlgItem(IDC_TP_Correction))->GetCheck();
    int Blind_On = ((CButton*)m_DlgPointer->GetDlgItem(IDC_Blind_Correction))->GetCheck();
    int Histogram_On = ((CButton*)m_DlgPointer->GetDlgItem(IDC_H_Enhance))->GetCheck();
    
 
-   /*33¤Î33333333333333333333333333
-    //------²âÊÔÁ½µã½ÃÕı£º¹Ì¶¨ÊäÈëÍ¼Ïñ-----
+   /*33ã®33333333333333333333333333
+    //------æµ‹è¯•ä¸¤ç‚¹çŸ«æ­£ï¼šå›ºå®šè¾“å…¥å›¾åƒ-----
    for (int i = 0; i < 768; i++)
 	   for (int j = 0; j < 1024; j++)
 		   Image[j + i * 1024] = 40000;
@@ -422,12 +494,12 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 	   for (int j = 0; j < 50; j++)
 		   Image[j + i * 1024] = 20000;
 
-   //-------------Ã¤Ôª²âÊÔ---------
+   //-------------ç›²å…ƒæµ‹è¯•---------
    for (int i = 700; i < 768; i = i + 3)
 	   for (int j = 980; j < 1024; j = j + 3)
 		   Image[j + i * 1024] = 0;  
    
-   //---------·Ç¾ùÔÈ½ÃÕı²âÊÔ------
+   //---------éå‡åŒ€çŸ«æ­£æµ‹è¯•------
    for (int i = 0; i < 768; i++)
 	   for (int j = 0; j < 1024; j++)
 		   Image[j + i * 1024] = 20000 * i / 768;
@@ -435,34 +507,36 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
    for (int i = 0; i < Height; i++)
 	   for (int j = 0; j < Width; j++)
 		   mImage[i * Width + j] = rImage[i * Width + j] >> 8;
-   // srcÎªÔ­Í¼Ïñ£¬grayÎª´¦ÀíºóÍ¼Ïñ£¬histÎªÖ±·½Í¼
-   Mat gray_host = Mat(Height, Width, CV_8UC1, mImage);
+   // srcä¸ºåŸå›¾åƒï¼Œgrayä¸ºå¤„ç†åå›¾åƒï¼Œhistä¸ºç›´æ–¹å›¾
+	Mat gray_host = Mat(Height, Width, CV_8UC1, mImage);
+	// ä½¿ç”¨ m_DlgPointer è®¿é—®æˆå‘˜å˜é‡
+	m_DlgPointer->m_saiHost = Mat(179, 210, CV_8UC1, saiImage);
    //Mat flipped_both;
-   //// ÉÏÏÂºÍ×óÓÒ·­×ª
+   //// ä¸Šä¸‹å’Œå·¦å³ç¿»è½¬
    //cv::flip(gray_host, flipped_both, -1);
    //gray_host = flipped_both;
-   // ´´½¨Ò»¸öMatÀ´´æ´¢·­×ªºóµÄÍ¼Ïñ
-   Mat flipped_lr; // lr for left-right
+   // åˆ›å»ºä¸€ä¸ªMatæ¥å­˜å‚¨ç¿»è½¬åçš„å›¾åƒ
+   ////Mat flipped_lr; // lr for left-right
 
-   // ½øĞĞ×óÓÒ·­×ª (flipCode = 1)
-   cv::flip(gray_host, flipped_lr, 1);
+   // è¿›è¡Œå·¦å³ç¿»è½¬ (flipCode = 1)
+   ////cv::flip(gray_host, flipped_lr, 1);
 
-   // ¸üĞÂ gray_host Îª·­×ªºóµÄÍ¼Ïñ
-   gray_host = flipped_lr;
+   // æ›´æ–° gray_host ä¸ºç¿»è½¬åçš„å›¾åƒ
+   ////gray_host = flipped_lr;
 
    //Mat gray_host1_2;
 
    ////------------------------------------------------------------------------------
-   //int cropHeight = 512; // ÀıÈç£¬²Ã¼ôÇøÓò¸ß¶ÈÎªÔ­Ê¼¸ß¶ÈµÄÒ»°ë
-   //int cropWidth = 193;   // ²Ã¼ôÇøÓò¿í¶ÈÎªÔ­Ê¼¿í¶ÈµÄÒ»°ë						   
-   //int startHeight1_2 = 0; // ¼ÆËã²Ã¼ôÇøÓòµÄÆğÊ¼ĞĞ
-   //int startWidth1_2 = 168;     // ¼ÆËã²Ã¼ôÇøÓòµÄÆğÊ¼ÁĞ
+   //int cropHeight = 512; // ä¾‹å¦‚ï¼Œè£å‰ªåŒºåŸŸé«˜åº¦ä¸ºåŸå§‹é«˜åº¦çš„ä¸€åŠ
+   //int cropWidth = 193;   // è£å‰ªåŒºåŸŸå®½åº¦ä¸ºåŸå§‹å®½åº¦çš„ä¸€åŠ						   
+   //int startHeight1_2 = 0; // è®¡ç®—è£å‰ªåŒºåŸŸçš„èµ·å§‹è¡Œ
+   //int startWidth1_2 = 168;     // è®¡ç®—è£å‰ªåŒºåŸŸçš„èµ·å§‹åˆ—
    //float ini;
    //cv::Rect cropRegion1_2(startWidth1_2, startHeight1_2, cropWidth, cropHeight);
    //gray_host1_2 = gray_host(cropRegion1_2);
    ////------------------------------------------------------------------------------
    //gray_host = gray_host;
-   // ´´½¨Ò»¸ö´óµÄ¿Õ°×Í¼ÏñÀ´´æ·ÅÆ´½Ó½á¹û  
+   // åˆ›å»ºä¸€ä¸ªå¤§çš„ç©ºç™½å›¾åƒæ¥å­˜æ”¾æ‹¼æ¥ç»“æœ  
    //gray_host1_2.copyTo(gray_host(cv::Rect(447, 0, 193, 512)));
 
    //for (int i = 0; i < 512; i++) {
@@ -472,217 +546,467 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 	  // }
 
    //}
-   //ÕâÀï·ÅÆ´½Ó£¨·Å¹ıÁË£©
+   if (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_Local_Enlarge))->GetCheck()) {
+	   cv::Mat processed_img = pDlg->distortionCailbration.process(gray_host);
+	   gray_host = processed_img;
+   }
+   //è¿™é‡Œæ”¾æ‹¼æ¥ï¼ˆæ”¾è¿‡äº†ï¼‰
    if (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck())
    {
 	   cv::Mat gray_host1 = gray_host;
-	   // 1. µ÷ÓÃ¸¨Öúº¯Êı»ñÈ¡·Å´óºóµÄÖĞĞÄÊÓÍ¼
+	   // 1. è°ƒç”¨è¾…åŠ©å‡½æ•°è·å–æ”¾å¤§åçš„ä¸­å¿ƒè§†å›¾
 	   cv::Mat super_input = pDlg->extractAndResizeCenterView(gray_host);
 
-	   // ¼ì²éº¯ÊıÊÇ·ñ³É¹¦·µ»ØÍ¼Ïñ
+	   // æ£€æŸ¥å‡½æ•°æ˜¯å¦æˆåŠŸè¿”å›å›¾åƒ
 	   if (super_input.empty()) {
-		   return; // Èç¹ûÌáÈ¡Ê§°Ü£¬ÔòÖĞÖ¹ºóĞø²Ù×÷
+		   return; // å¦‚æœæå–å¤±è´¥ï¼Œåˆ™ä¸­æ­¢åç»­æ“ä½œ
 	   }
 	   gray_host = super_input;
-	   // ½«Ô­Ê¼¡¢ÇåÎúµÄ centerView ËÍÈë£¬ÄãµÄ TensorRT Àà»áÕıÈ·´¦ÀíËõ·Å
+	   // å°†åŸå§‹ã€æ¸…æ™°çš„ centerView é€å…¥ï¼Œä½ çš„ TensorRT ç±»ä¼šæ­£ç¡®å¤„ç†ç¼©æ”¾
 	   m_super_tensorRT->preprocessImage_LightField(gray_host1, 3);
 	   m_super_tensorRT->inference(1);
-	   // ºó´¦ÀíµÃµ½µÄ½á¹û depth_result ÊÇ¶ÔÓ¦ centerView ³ß´çµÄÉî¶ÈÍ¼
+	   // åå¤„ç†å¾—åˆ°çš„ç»“æœ depth_result æ˜¯å¯¹åº” centerView å°ºå¯¸çš„æ·±åº¦å›¾
 	   cv::Mat super_result = m_super_tensorRT->postprocessOutput_Super(1);
 	   cv::Mat resizedFinalSuperImg;
 	   cv::resize(super_result, resizedFinalSuperImg, cv::Size(Width, Height), 0, 0, cv::INTER_LINEAR);
 	   gray_host = resizedFinalSuperImg;
+	   m_DlgPointer->m_saiHost = super_result;
    }
    if (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_DEPTH_CHECK))->GetCheck())
    {
 	   if (BST_CHECKED != ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck()) {
-		   // 1. µ÷ÓÃ¸¨Öúº¯Êı»ñÈ¡·Å´óºóµÄÖĞĞÄÊÓÍ¼
+		   // 1. è°ƒç”¨è¾…åŠ©å‡½æ•°è·å–æ”¾å¤§åçš„ä¸­å¿ƒè§†å›¾
 		   cv::Mat depth_input = pDlg->extractAndResizeCenterView(gray_host);
 
-		   // ¼ì²éº¯ÊıÊÇ·ñ³É¹¦·µ»ØÍ¼Ïñ
+		   // æ£€æŸ¥å‡½æ•°æ˜¯å¦æˆåŠŸè¿”å›å›¾åƒ
 		   if (depth_input.empty()) {
-			   return; // Èç¹ûÌáÈ¡Ê§°Ü£¬ÔòÖĞÖ¹ºóĞø²Ù×÷
+			   return; // å¦‚æœæå–å¤±è´¥ï¼Œåˆ™ä¸­æ­¢åç»­æ“ä½œ
 		   }
 		   gray_host = depth_input;
 	   }  
 	   m_depth_tensorRT->preprocessImage_Depth(gray_host);
 	   m_depth_tensorRT->inference(1);
-	   // ºó´¦ÀíµÃµ½µÄ½á¹û depth_result ÊÇ¶ÔÓ¦ centerView ³ß´çµÄÉî¶ÈÍ¼
+	   // åå¤„ç†å¾—åˆ°çš„ç»“æœ depth_result æ˜¯å¯¹åº” centerView å°ºå¯¸çš„æ·±åº¦å›¾
 	   cv::Mat depth_result = m_depth_tensorRT->postprocessOutput_Depth(1);
 
-	   // ¸üĞÂÏÔÊ¾µÄÍ¼Ïñ¡£×¢Òâ gray_host ÏÖÔÚ»á±ä³É²ÊÉ«Í¼
+	   // æ›´æ–°æ˜¾ç¤ºçš„å›¾åƒã€‚æ³¨æ„ gray_host ç°åœ¨ä¼šå˜æˆå½©è‰²å›¾
 	   cv::Mat final_display_img;
 	   cv::cvtColor(depth_result, final_display_img, cv::COLOR_BGR2GRAY);
-	   //// µ÷Õûfinal_display_imgµÄ´óĞ¡ÎªÔ­Ê¼Í¼ÏñµÄ´óĞ¡
+	   //// è°ƒæ•´final_display_imgçš„å¤§å°ä¸ºåŸå§‹å›¾åƒçš„å¤§å°
 	   cv::Mat resizedFinalDisplayImg;
 	   cv::resize(final_display_img, resizedFinalDisplayImg, cv::Size(Width, Height), 0, 0, cv::INTER_LINEAR);
 	   gray_host = final_display_img;
    }
    if (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_DETECTION_CHECK))->GetCheck())
    {
-	   /*// ¶¨ÒåÒª·Ö¸îµÄÇøÓò£¨ÓëMATLAB½Å±¾ÏàÍ¬£©
-	   std::vector<std::vector<int>> regions = {
-		   {1, 150, 1, 170},     // ÇøÓò1: 1-150ĞĞ, 1-170ÁĞ
-		   {1, 150, 210, 420},   // ÇøÓò2: 1-150ĞĞ, 210-420ÁĞ
-		   {1, 150, 460, Width}, // ÇøÓò3: 1-150ĞĞ, 460µ½×îºóÒ»ÁĞ
-		   {171, 350, 1, 170},   // ÇøÓò4: 171-350ĞĞ, 1-170ÁĞ
-		   {171, 350, 210, 420}, // ÇøÓò5: 171-350ĞĞ, 210-420ÁĞ (ÖĞĞÄÊÓÍ¼)
-		   {171, 350, 460, Width}, // ÇøÓò6: 171-350ĞĞ, 460µ½×îºóÒ»ÁĞ
-		   {371, Height, 1, 170}, // ÇøÓò7: 370µ½×îºóÒ»ĞĞ, 1-170ÁĞ
-		   {371, Height, 210, 420}, // ÇøÓò8: 370µ½×îºóÒ»ĞĞ, 210-420ÁĞ
-		   {371, Height, 460, Width} // ÇøÓò9: 370µ½×îºóÒ»ĞĞ, 460µ½×îºóÒ»ÁĞ
-	   };
+	   // å§‹ç»ˆåœ¨åŸå§‹å›¾åƒä¸Šè¿è¡Œæ£€æµ‹
+	   cv::Mat original_gray_host = gray_host.clone(); // å…‹éš†åŸå§‹å›¾åƒç”¨äºæ£€æµ‹
 
-	   // ´´½¨Ò»¸övectorÀ´´æ´¢·Ö¸îºóµÄÍ¼Ïñ
-	   std::vector<Mat> splitImgs(9);
-
-	   // ¿Ù³öÃ¿¸öÇøÓòµÄÍ¼Ïñ
-	   for (int i = 0; i < 9; i++) {
-		   // ×¢Òâ£ºOpenCVµÄĞĞÁĞË÷Òı´Ó0¿ªÊ¼£¬ĞèÒª¼õ1
-		   int startRow = regions[i][0] - 1;
-		   int endRow = regions[i][1] - 1;
-		   int startCol = regions[i][2] - 1;
-		   int endCol = regions[i][3] - 1;
-
-		   // È·±£Ë÷ÒıÔÚÓĞĞ§·¶Î§ÄÚ
-		   startRow = std::max(0, startRow);
-		   endRow = std::min(Height - 1, endRow);
-		   startCol = std::max(0, startCol);
-		   endCol = std::min(Width - 1, endCol);
-
-		   // Ê¹ÓÃOpenCVµÄRect´´½¨¸ĞĞËÈ¤ÇøÓò(ROI)
-		   cv::Rect roi(startCol, startRow, endCol - startCol + 1, endRow - startRow + 1);
-		   splitImgs[i] = gray_host(roi).clone();  // ¿ËÂ¡ÒÔ´´½¨¶ÀÁ¢Í¼Ïñ
-	   }
-
-	   // ÕÒµ½×îĞ¡³ß´çµÄÍ¼Ïñ
-	   int minHeight = INT_MAX;
-	   int minWidth = INT_MAX;
-	   int minIndex = 0;
-
-	   for (int i = 0; i < 9; i++) {
-		   int height = splitImgs[i].rows;
-		   int width = splitImgs[i].cols;
-
-		   if (height < minHeight || (height == minHeight && width < minWidth)) {
-			   minHeight = height;
-			   minWidth = width;
-			   minIndex = i;
-		   }
-	   }
-
-	   // »ñÈ¡×îĞ¡³ß´ç
-	   minHeight = splitImgs[minIndex].rows;
-	   minWidth = splitImgs[minIndex].cols;
-
-	   // ²Ã¼ôÆäËûÍ¼Ïñµ½×îĞ¡³ß´ç£¨¾ÓÖĞ²Ã¼ô£©
-	   for (int i = 0; i < 9; i++) {
-		   if (i != minIndex) {
-			   int height = splitImgs[i].rows;
-			   int width = splitImgs[i].cols;
-
-			   int startRow = (height - minHeight) / 2;
-			   int startCol = (width - minWidth) / 2;
-
-			   cv::Rect roi(startCol, startRow, minWidth, minHeight);
-			   splitImgs[i] = splitImgs[i](roi).clone();
-		   }
-	   }
-
-	   // Ê¹ÓÃÖĞĞÄÊÓÍ¼£¨ÇøÓò5£©Ìæ»»Ô­Ê¼Í¼Ïñ
-	   // ×¢Òâ£ºË÷Òı4¶ÔÓ¦ÇøÓò5£¨C++´Ó0¿ªÊ¼¼ÆÊı£©
-	   Mat centerView = splitImgs[4];
-	   Mat resizedCenterView;
-	   cv::resize(centerView, resizedCenterView, cv::Size(Width, Height), 0, 0, cv::INTER_LINEAR);
-	   // ´´½¨Ò»¸öÓëÔ­Ê¼Í¼ÏñÏàÍ¬´óĞ¡µÄ¿Õ°×Í¼Ïñ
-	   Mat resultImage = Mat::zeros(Height, Width, CV_8UC1);
-
-	   // ½«ÖĞĞÄÊÓÍ¼·ÅÖÃÔÚ½á¹ûÍ¼ÏñµÄÖĞĞÄÎ»ÖÃ
-	   int startRow = (Height - resizedCenterView.rows) / 2;
-	   int startCol = (Width - resizedCenterView.cols) / 2;
-
-	   // È·±£Î»ÖÃÓĞĞ§
-	   startRow = std::max(0, startRow);
-	   startCol = std::max(0, startCol);
-
-	   // ¼ÆËãÊµ¼Ê¿ÉÒÔ·ÅÖÃµÄ³ß´ç
-	   int actualHeight = std::min(resizedCenterView.rows, Height - startRow);
-	   int actualWidth = std::min(resizedCenterView.cols, Width - startCol);
-
-	   // ¸´ÖÆÖĞĞÄÊÓÍ¼µ½½á¹ûÍ¼Ïñ
-	   cv::Rect roi(startCol, startRow, actualWidth, actualHeight);
-	   Mat resultROI = resultImage(roi);
-	   resizedCenterView(cv::Rect(0, 0, actualWidth, actualHeight)).copyTo(resultROI);*/
-	   //ÒÔÉÏÄÚÈİÎª»ñÈ¡µ½ÖĞĞÄÇøÓòÊÓ½ÇµÄ£¬¼ÆËã¸´ÔÓÓÃÒÔÏÂÄÚÈİ½øĞĞÌæ»»ÁË
-	   if (BST_CHECKED != ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck()) {
-		   // 1. µ÷ÓÃ¸¨Öúº¯Êı»ñÈ¡·Å´óºóµÄÖĞĞÄÊÓÍ¼
-		   cv::Mat detection_input = pDlg->extractAndResizeCenterView(gray_host);
-
-		   // ¼ì²éº¯ÊıÊÇ·ñ³É¹¦·µ»ØÍ¼Ïñ
-		   if (detection_input.empty()) {
-			   return; // Èç¹ûÌáÈ¡Ê§°Ü£¬ÔòÖĞÖ¹ºóĞø²Ù×÷
-		   }
-		   // ¸üĞÂÏÔÊ¾µÄÍ¼Ïñ
-		   gray_host = detection_input;
-	   }
-	   //Ô¤´¦Àí
-	   m_detect_tensorRT->preprocessImage_Detect(gray_host);
-	   // Ö´ĞĞÍÆÀí
+	   // é¢„å¤„ç† (ä½¿ç”¨åŸå§‹å›¾åƒ)
+	   m_detect_tensorRT->preprocessImage_Detect(original_gray_host);
+	   // æ‰§è¡Œæ¨ç† (ä½¿ç”¨åŸå§‹å›¾åƒ)
 	   m_detect_tensorRT->inference(1);
-	   // ºó´¦Àí
+	   // åå¤„ç†
 	   std::vector<Detection> detections = m_detect_tensorRT->postprocessOutputYOLOV8(1);
 
+	   // å®šä¹‰å›ºå®šä¸­å¿ƒåŒºåŸŸï¼ˆåŒºåŸŸ5ï¼‰çš„ROIï¼Œç”¨äºåç»­åˆ¤æ–­å’Œåæ ‡è½¬æ¢
+	   // åŒºåŸŸ5çš„åæ ‡ (1-based): {171, 350, 210, 420}  -> 0-based: {170, 349, 209, 419}
+	   int fixed_roi_x = 210 - 1;
+	   int fixed_roi_y = 171 - 1;
+	   int fixed_roi_width = (420 - 1) - fixed_roi_x + 1;
+	   int fixed_roi_height = (350 - 1) - fixed_roi_y + 1;
+	   cv::Rect fixedCenterROI(fixed_roi_x, fixed_roi_y, fixed_roi_width, fixed_roi_height);
+
+	   // ç¡®ä¿ fixedCenterROI ä¸è¶…å‡ºåŸå§‹å›¾åƒè¾¹ç•Œ
+	   fixedCenterROI.x = std::max(0, fixedCenterROI.x);
+	   fixedCenterROI.y = std::max(0, fixedCenterROI.y);
+	   fixedCenterROI.width = std::min(fixedCenterROI.width, original_gray_host.cols - fixedCenterROI.x);
+	   fixedCenterROI.height = std::min(fixedCenterROI.height, original_gray_host.rows - fixedCenterROI.y);
+
+
+	   // å‡†å¤‡ä¸€ä¸ªå›¾åƒç”¨äºæœ€ç»ˆæ˜¾ç¤ºï¼ˆå¯èƒ½æ˜¯åŸå§‹å›¾åƒæˆ–æ”¾å¤§çš„ä¸­å¿ƒåŒºåŸŸï¼‰
+	   cv::Mat finalDisplayImage;
+
+	   // åˆ¤æ–­æ˜¯å¦éœ€è¦æ˜¾ç¤ºæ”¾å¤§çš„ä¸­å¿ƒåŒºåŸŸ
+	   if (BST_CHECKED != ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck()) {
+		   // å¦‚æœ IDC_SUPER_CHECK æœªé€‰ä¸­ï¼Œåˆ™æå–å¹¶æ”¾å¤§å›ºå®šä¸­å¿ƒåŒºåŸŸ
+		   finalDisplayImage = pDlg->extractAndResizeCenterView(original_gray_host);
+		   if (finalDisplayImage.empty()) {
+			   // å¦‚æœæå–å¤±è´¥ï¼Œé€€å›åˆ°æ˜¾ç¤ºåŸå§‹å›¾åƒ
+			   finalDisplayImage = original_gray_host.clone();
+		   }
+	   }
+	   else {
+		   // å¦‚æœ IDC_SUPER_CHECK é€‰ä¸­ï¼Œåˆ™æ˜¾ç¤ºåŸå§‹å›¾åƒ
+		   finalDisplayImage = original_gray_host.clone();
+	   }
+
+	   // éå†æ£€æµ‹ç»“æœï¼Œå¹¶ç»˜åˆ¶åˆ° finalDisplayImage ä¸Š
 	   for (const auto& det : detections) {
-		   cv::rectangle(gray_host,
-			   cv::Point(det.x, det.y),
-			   cv::Point(det.x + det.width, det.y + det.height),
-			   cv::Scalar(0, 255, 0), 2);
-		   cv::putText(gray_host,
-			   m_detect_tensorRT->getClassName(det.classId) + " " + std::to_string(det.confidence)
-			   /*+ " delay:" + std::to_string(engineProcessTime)*/,
-			   cv::Point(det.x, det.y - 5),
-			   cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
+		   cv::Rect originalBox(det.x, det.y, det.width, det.height);
+
+		   // å†³å®šæ˜¯å¦ç»˜åˆ¶è¿™ä¸ªæ£€æµ‹æ¡†
+		   bool shouldDraw = false;
+		   cv::Rect boxToDraw; // æœ€ç»ˆè¦ç»˜åˆ¶çš„æ¡†ï¼Œå¯èƒ½éœ€è¦åæ ‡è½¬æ¢
+
+		   if (BST_CHECKED != ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck()) {
+			   // å¦‚æœæ˜¾ç¤ºçš„æ˜¯æ”¾å¤§çš„ä¸­å¿ƒåŒºåŸŸ (IDC_SUPER_CHECK æœªé€‰ä¸­)
+			   // æ£€æŸ¥åŸå§‹æ¡†æ˜¯å¦ä¸å›ºå®šä¸­å¿ƒåŒºåŸŸæœ‰äº¤é›†
+			   cv::Rect intersection = originalBox & fixedCenterROI;
+			   if (!intersection.empty()) {
+				   shouldDraw = true;
+				   // è®¡ç®—åŸå§‹æ£€æµ‹æ¡†åœ¨å›ºå®šä¸­å¿ƒåŒºåŸŸå†…çš„ç›¸å¯¹åæ ‡
+				   // ç„¶åå°†å…¶æŒ‰æ”¾å¤§æ¯”ä¾‹è½¬æ¢åˆ° finalDisplayImage ä¸Š
+				   // æ”¾å¤§æ¯”ä¾‹ = æœ€ç»ˆå›¾åƒå®½åº¦ / å›ºå®šä¸­å¿ƒåŒºåŸŸå®½åº¦
+				   double scale_x = (double)finalDisplayImage.cols / fixedCenterROI.width;
+				   double scale_y = (double)finalDisplayImage.rows / fixedCenterROI.height;
+
+				   boxToDraw.x = static_cast<int>((originalBox.x - fixedCenterROI.x) * scale_x);
+				   boxToDraw.y = static_cast<int>((originalBox.y - fixedCenterROI.y) * scale_y);
+				   boxToDraw.width = static_cast<int>(originalBox.width * scale_x);
+				   boxToDraw.height = static_cast<int>(originalBox.height * scale_y);
+
+				   // ç¡®ä¿ç»˜åˆ¶çš„æ¡†åœ¨ finalDisplayImage å†…éƒ¨
+				   boxToDraw.x = std::max(0, boxToDraw.x);
+				   boxToDraw.y = std::max(0, boxToDraw.y);
+				   boxToDraw.width = std::min(boxToDraw.width, finalDisplayImage.cols - boxToDraw.x);
+				   boxToDraw.height = std::min(boxToDraw.height, finalDisplayImage.rows - boxToDraw.y);
+			   }
+		   }
+		   else {
+			   // å¦‚æœæ˜¾ç¤ºçš„æ˜¯åŸå§‹å›¾åƒ (IDC_SUPER_CHECK é€‰ä¸­)
+			   // ç›´æ¥ç»˜åˆ¶åŸå§‹æ£€æµ‹æ¡†
+			   shouldDraw = true;
+			   boxToDraw = originalBox;
+
+			   // ç¡®ä¿ç»˜åˆ¶çš„æ¡†åœ¨ finalDisplayImage å†…éƒ¨
+			   boxToDraw.x = std::max(0, boxToDraw.x);
+			   boxToDraw.y = std::max(0, boxToDraw.y);
+			   boxToDraw.width = std::min(boxToDraw.width, finalDisplayImage.cols - boxToDraw.x);
+			   boxToDraw.height = std::min(boxToDraw.height, finalDisplayImage.rows - boxToDraw.y);
+		   }
+
+		   if (shouldDraw && boxToDraw.width > 0 && boxToDraw.height > 0) {
+			   cv::rectangle(finalDisplayImage, boxToDraw, cv::Scalar(255, 255, 255), 2);
+			   cv::putText(finalDisplayImage,
+				   m_detect_tensorRT->getClassName(det.classId) + " " + std::to_string(det.confidence),
+				   cv::Point(boxToDraw.x, boxToDraw.y - 5),
+				   cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255), 1);
+		   }
 	   }
+	   // å°†æœ€ç»ˆçš„æ˜¾ç¤ºå›¾åƒèµ‹å€¼ç»™ gray_host
+	   gray_host = finalDisplayImage;
    }
+   //if (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_DETECTION_CHECK))->GetCheck())
+   //{
+	  // /*// å®šä¹‰è¦åˆ†å‰²çš„åŒºåŸŸï¼ˆä¸MATLABè„šæœ¬ç›¸åŒï¼‰
+	  // std::vector<std::vector<int>> regions = {
+		 //  {1, 150, 1, 170},     // åŒºåŸŸ1: 1-150è¡Œ, 1-170åˆ—
+		 //  {1, 150, 210, 420},   // åŒºåŸŸ2: 1-150è¡Œ, 210-420åˆ—
+		 //  {1, 150, 460, Width}, // åŒºåŸŸ3: 1-150è¡Œ, 460åˆ°æœ€åä¸€åˆ—
+		 //  {171, 350, 1, 170},   // åŒºåŸŸ4: 171-350è¡Œ, 1-170åˆ—
+		 //  {171, 350, 210, 420}, // åŒºåŸŸ5: 171-350è¡Œ, 210-420åˆ— (ä¸­å¿ƒè§†å›¾)
+		 //  {171, 350, 460, Width}, // åŒºåŸŸ6: 171-350è¡Œ, 460åˆ°æœ€åä¸€åˆ—
+		 //  {371, Height, 1, 170}, // åŒºåŸŸ7: 370åˆ°æœ€åä¸€è¡Œ, 1-170åˆ—
+		 //  {371, Height, 210, 420}, // åŒºåŸŸ8: 370åˆ°æœ€åä¸€è¡Œ, 210-420åˆ—
+		 //  {371, Height, 460, Width} // åŒºåŸŸ9: 370åˆ°æœ€åä¸€è¡Œ, 460åˆ°æœ€åä¸€åˆ—
+	  // };
 
-   unsigned char* rdata;
-   rdata = gray_host.ptr<unsigned char>(0);
-   for (int i = 0; i < Height; i++)
-	   for (int j = 0; j < Width; j++)
-		   rImage[i * Width + j] = rdata[i * Width + j] << 8;
-   //----------------   GPUÖ´ĞĞ³ÌĞò   -------------------
-   if (BST_CHECKED == ((CButton*)m_DlgPointer->GetDlgItem(IDC_GPU))->GetCheck())
-   {
-	   //----------GPU- ²âÊÔ´úÂë------------
+	  // // åˆ›å»ºä¸€ä¸ªvectoræ¥å­˜å‚¨åˆ†å‰²åçš„å›¾åƒ
+	  // std::vector<Mat> splitImgs(9);
 
-	   // GPU ´¦Àíº¯Êı £º Í¼ÏñÖ¸Õë£¬Í¼Ïñ¿í£¬Í¼Ïñ³¤£¬Ê¹ÓÃGPUÏß³ÌÊı
-	   //Image[666] = 60000;
-	   //Image[0] = 2;
-	   if(Blind_On > 0)
-		   cudaStatus=GPU_Blind_Correction(Image,dev_img, dev_pBlind_Ram, Height,Width);
-	   if(TP_On > 0)
-		   cudaStatus=GPU_TwoPoint_Correction(Image,dev_img, dev_pTP_Gain,dev_pTP_Bias, Height, Width);
-	   if (Histogram_On > 0)
-		cudaStatus = GPU_Histogram_Enhancement(Image, Histogram, Histogram_Float,dev_img, dev_Histogram, dev_Histogram_float, Height, Width);
-	   //int k = pHistogram_Enhancement[65535];
+	  // // æŠ å‡ºæ¯ä¸ªåŒºåŸŸçš„å›¾åƒ
+	  // for (int i = 0; i < 9; i++) {
+		 //  // æ³¨æ„ï¼šOpenCVçš„è¡Œåˆ—ç´¢å¼•ä»0å¼€å§‹ï¼Œéœ€è¦å‡1
+		 //  int startRow = regions[i][0] - 1;
+		 //  int endRow = regions[i][1] - 1;
+		 //  int startCol = regions[i][2] - 1;
+		 //  int endCol = regions[i][3] - 1;
 
-	   if (cudaStatus != cudaSuccess) {
-		   fprintf(stderr, "addKernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
-		   //goto Error;
-	   }
+		 //  // ç¡®ä¿ç´¢å¼•åœ¨æœ‰æ•ˆèŒƒå›´å†…
+		 //  startRow = std::max(0, startRow);
+		 //  endRow = std::min(Height - 1, endRow);
+		 //  startCol = std::max(0, startCol);
+		 //  endCol = std::min(Width - 1, endCol);
 
-   }
-   m_DlgPointer->m_Buffers->WriteRect(0, 0, Width, Height, Image);
-   // µ÷ÓÃcudaËã·¨³ÌĞò£ºÖ±½Ó½«½á¹û±£´æµ½È«¾Ö±äÁ¿rImageÖĞ¡£
- /*  m_DlgPointer->CUDA_Algorithm();*/
-   if (((CButton*)m_DlgPointer->GetDlgItem(IDC_Local_Enlarge))->GetCheck()) {
-	   m_DlgPointer->localEnlarge(Height, Width);
-	   m_DlgPointer->m_Buffers->WriteRect(0, 0, Width, Height, Image);
-   }
-   pDlg->m_View->Show();
+		 //  // ä½¿ç”¨OpenCVçš„Rectåˆ›å»ºæ„Ÿå…´è¶£åŒºåŸŸ(ROI)
+		 //  cv::Rect roi(startCol, startRow, endCol - startCol + 1, endRow - startRow + 1);
+		 //  splitImgs[i] = gray_host(roi).clone();  // å…‹éš†ä»¥åˆ›å»ºç‹¬ç«‹å›¾åƒ
+	  // }
 
-	   
-   //---------Ïò»º´æÇøÖĞĞ´Í¼Ïñ-----
+	  // // æ‰¾åˆ°æœ€å°å°ºå¯¸çš„å›¾åƒ
+	  // int minHeight = INT_MAX;
+	  // int minWidth = INT_MAX;
+	  // int minIndex = 0;
+
+	  // for (int i = 0; i < 9; i++) {
+		 //  int height = splitImgs[i].rows;
+		 //  int width = splitImgs[i].cols;
+
+		 //  if (height < minHeight || (height == minHeight && width < minWidth)) {
+			//   minHeight = height;
+			//   minWidth = width;
+			//   minIndex = i;
+		 //  }
+	  // }
+
+	  // // è·å–æœ€å°å°ºå¯¸
+	  // minHeight = splitImgs[minIndex].rows;
+	  // minWidth = splitImgs[minIndex].cols;
+
+	  // // è£å‰ªå…¶ä»–å›¾åƒåˆ°æœ€å°å°ºå¯¸ï¼ˆå±…ä¸­è£å‰ªï¼‰
+	  // for (int i = 0; i < 9; i++) {
+		 //  if (i != minIndex) {
+			//   int height = splitImgs[i].rows;
+			//   int width = splitImgs[i].cols;
+
+			//   int startRow = (height - minHeight) / 2;
+			//   int startCol = (width - minWidth) / 2;
+
+			//   cv::Rect roi(startCol, startRow, minWidth, minHeight);
+			//   splitImgs[i] = splitImgs[i](roi).clone();
+		 //  }
+	  // }
+
+	  // // ä½¿ç”¨ä¸­å¿ƒè§†å›¾ï¼ˆåŒºåŸŸ5ï¼‰æ›¿æ¢åŸå§‹å›¾åƒ
+	  // // æ³¨æ„ï¼šç´¢å¼•4å¯¹åº”åŒºåŸŸ5ï¼ˆC++ä»0å¼€å§‹è®¡æ•°ï¼‰
+	  // Mat centerView = splitImgs[4];
+	  // Mat resizedCenterView;
+	  // cv::resize(centerView, resizedCenterView, cv::Size(Width, Height), 0, 0, cv::INTER_LINEAR);
+	  // // åˆ›å»ºä¸€ä¸ªä¸åŸå§‹å›¾åƒç›¸åŒå¤§å°çš„ç©ºç™½å›¾åƒ
+	  // Mat resultImage = Mat::zeros(Height, Width, CV_8UC1);
+
+	  // // å°†ä¸­å¿ƒè§†å›¾æ”¾ç½®åœ¨ç»“æœå›¾åƒçš„ä¸­å¿ƒä½ç½®
+	  // int startRow = (Height - resizedCenterView.rows) / 2;
+	  // int startCol = (Width - resizedCenterView.cols) / 2;
+
+	  // // ç¡®ä¿ä½ç½®æœ‰æ•ˆ
+	  // startRow = std::max(0, startRow);
+	  // startCol = std::max(0, startCol);
+
+	  // // è®¡ç®—å®é™…å¯ä»¥æ”¾ç½®çš„å°ºå¯¸
+	  // int actualHeight = std::min(resizedCenterView.rows, Height - startRow);
+	  // int actualWidth = std::min(resizedCenterView.cols, Width - startCol);
+
+	  // // å¤åˆ¶ä¸­å¿ƒè§†å›¾åˆ°ç»“æœå›¾åƒ
+	  // cv::Rect roi(startCol, startRow, actualWidth, actualHeight);
+	  // Mat resultROI = resultImage(roi);
+	  // resizedCenterView(cv::Rect(0, 0, actualWidth, actualHeight)).copyTo(resultROI);*/
+	  // //ä»¥ä¸Šå†…å®¹ä¸ºè·å–åˆ°ä¸­å¿ƒåŒºåŸŸè§†è§’çš„ï¼Œè®¡ç®—å¤æ‚ç”¨ä»¥ä¸‹å†…å®¹è¿›è¡Œæ›¿æ¢äº†
+	  // if (BST_CHECKED != ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck()) {
+		 //  // 1. è°ƒç”¨è¾…åŠ©å‡½æ•°è·å–æ”¾å¤§åçš„ä¸­å¿ƒè§†å›¾
+		 //  cv::Mat detection_input = pDlg->extractAndResizeCenterView(gray_host);
+
+		 //  // æ£€æŸ¥å‡½æ•°æ˜¯å¦æˆåŠŸè¿”å›å›¾åƒ
+		 //  if (detection_input.empty()) {
+			//   return; // å¦‚æœæå–å¤±è´¥ï¼Œåˆ™ä¸­æ­¢åç»­æ“ä½œ
+		 //  }
+		 //  // æ›´æ–°æ˜¾ç¤ºçš„å›¾åƒ
+		 //  gray_host = detection_input;
+	  // }
+	  // //é¢„å¤„ç†
+	  // cv::Mat original_gray_host = gray_host.clone(); // å…‹éš†åŸå§‹å›¾åƒç”¨äºæ£€æµ‹
+	  // m_detect_tensorRT->preprocessImage_Detect(original_gray_host);
+	  // // æ‰§è¡Œæ¨ç†
+	  // m_detect_tensorRT->inference(1);
+	  // // åå¤„ç†
+	  // std::vector<Detection> detections = m_detect_tensorRT->postprocessOutputYOLOV8(1);
+	  // std::vector<cv::Rect> detBoxes;
+	  // for (const auto& det : detections) {
+		 //  cv::Rect box(det.x, det.y, det.width, det.height);
+		 //  detBoxes.push_back(box);
+
+		 //  cv::rectangle(gray_host, box, cv::Scalar(255, 255, 255), 2);
+		 //  cv::putText(gray_host,
+			//   m_detect_tensorRT->getClassName(det.classId) + " " + std::to_string(det.confidence)
+			//   /*+ " delay:" + std::to_string(engineProcessTime)*/,
+			//   cv::Point(det.x, det.y - 5),
+			//   cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255), 1);
+	  // }
+   //}
+    // æ£€æŸ¥ IDC_TRACK_CHECK å¤é€‰æ¡†æ˜¯å¦è¢«é€‰ä¸­
+	bool currentTrackChecked = (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_TRACK_CHECK))->GetCheck());
+	if (currentTrackChecked)
+	{
+		// 1. åˆå§‹æ£€æŸ¥å’Œå‡†å¤‡
+		if (gray_host.empty()) {
+			return;
+		}
+
+		cv::Mat centerImage;
+		
+
+		// å…³é”®ä¿®å¤ï¼šæ‰€æœ‰å¸§éƒ½éœ€è¦åœ¨åŸå§‹å›¾åƒåŸºç¡€ä¸Šæå–ä¸­å¿ƒåŒºåŸŸ
+		cv::Mat originalImage = gray_host.clone();
+		centerImage = pDlg->extractAndResizeCenterView(originalImage);
+		if (centerImage.empty()) {
+			centerImage = originalImage.clone();
+		}
+		//pDlg->m_enableTracking = true; // åªåœ¨åˆå§‹åŒ–æˆåŠŸæ—¶å¼€å¯è·Ÿè¸ª
+		// 4. æ ¸å¿ƒè·Ÿè¸ªé€»è¾‘
+		if (pDlg->m_tracker) {
+			// 4.1 åˆ¤æ–­æ˜¯å¦æ˜¯è·Ÿè¸ªçš„ç¬¬ä¸€å¸§ï¼ˆå³è·Ÿè¸ªå™¨å°šæœªå¼€å§‹è·Ÿè¸ªï¼‰
+			if (!pDlg->m_tracker->isTracking()) {
+				// ç¬¬ä¸€å¸§å¤„ç†ï¼šåœ¨ä¸­å¿ƒå›¾åƒä¸Šç›´æ¥è¿›è¡Œç›®æ ‡æ£€æµ‹
+				cv::Mat detectionImage = centerImage.clone();
+
+				// ä½¿ç”¨ TensorRT æ¨¡å‹åœ¨ä¸­å¿ƒå›¾åƒä¸Šè¿›è¡Œæ£€æµ‹
+				m_track_tensorRT->preprocessImage_Detect(detectionImage);
+				m_track_tensorRT->inference(1);
+				std::vector<Detection> detections = m_track_tensorRT->postprocessOutputYOLOV8(1);
+
+				// åœ¨ä¸­å¿ƒå›¾åƒä¸­å¯»æ‰¾ç›®æ ‡
+				cv::Rect targetInCenterImage;
+				bool foundTarget = false;
+
+				for (const auto& det : detections) {
+					/*if (m_track_tensorRT->getClassName(det.classId) == "tank") {*/
+					targetInCenterImage = cv::Rect(det.x, det.y, det.width, det.height);
+					foundTarget = true;
+					break;
+					/*}*/
+				}
+
+				// å¦‚æœåœ¨ä¸­å¿ƒå›¾åƒä¸­æ‰¾åˆ°äº†ç›®æ ‡
+				if (foundTarget) {
+					targetInCenterImage = targetInCenterImage & cv::Rect(0, 0, centerImage.cols, centerImage.rows);
+
+					if (targetInCenterImage.width > 5 && targetInCenterImage.height > 5) {
+						bool initOK = pDlg->m_tracker->initTracker(centerImage, targetInCenterImage);
+						if (initOK) {
+							pDlg->m_enableTracking = true; // åªåœ¨åˆå§‹åŒ–æˆåŠŸæ—¶å¼€å¯è·Ÿè¸ª
+							cv::rectangle(centerImage, targetInCenterImage, cv::Scalar(0, 0, 0), 2);
+							cv::putText(centerImage, "Tracker Initialized", cv::Point(30, 40),
+								cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 0), 2);
+						}
+						else {
+							pDlg->m_enableTracking = false; // åˆå§‹åŒ–å¤±è´¥æ—¶å…³é—­è·Ÿè¸ª
+							cv::putText(centerImage, "Tracker Init Failed", cv::Point(30, 40),
+								cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 0), 2);
+						}
+					}
+				}
+				else {
+					pDlg->m_enableTracking = false; // æ²¡æœ‰æ‰¾åˆ°ç›®æ ‡æ—¶å…³é—­è·Ÿè¸ª
+					cv::putText(centerImage, "No Target in Center Area", cv::Point(30, 40),
+						cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 0), 2);
+				}
+			}
+			else {
+
+				// 4.2 åç»­å¸§å¤„ç†ï¼šåœ¨ä¸­å¿ƒå›¾åƒä¸Šç›´æ¥æ‰§è¡Œç›®æ ‡è·Ÿè¸ª
+				pDlg->m_trackResult = pDlg->m_tracker->updateTracker(centerImage);
+
+				// æ£€æŸ¥è·Ÿè¸ªæ˜¯å¦æˆåŠŸ
+				if (pDlg->m_trackResult.success) {
+					// æ·»åŠ é¢å¤–çš„è¾¹ç•Œæ¡†éªŒè¯
+					cv::Rect trackedBox = pDlg->m_trackResult.bbox;
+					bool isBoxValid = trackedBox.x >= 0 &&
+						trackedBox.y >= 0 &&
+						trackedBox.x + trackedBox.width <= centerImage.cols &&
+						trackedBox.y + trackedBox.height <= centerImage.rows &&
+						trackedBox.width > 5 &&
+						trackedBox.height > 5;
+
+					if (isBoxValid) {
+						// ç»˜åˆ¶æ£€æµ‹æ¡†å’Œè½¨è¿¹
+						cv::rectangle(centerImage, pDlg->m_trackResult.bbox, cv::Scalar(0, 0, 0), 2);
+
+						// ç»˜åˆ¶è½¨è¿¹
+						if (!pDlg->m_trackResult.trajectory.empty()) {
+							for (size_t i = 1; i < pDlg->m_trackResult.trajectory.size(); ++i) {
+								cv::Point prevPoint = pDlg->m_trackResult.trajectory[i - 1];
+								cv::Point currPoint = pDlg->m_trackResult.trajectory[i];
+
+								if (prevPoint.x >= 0 && prevPoint.y >= 0 &&
+									currPoint.x >= 0 && currPoint.y >= 0 &&
+									prevPoint.x < centerImage.cols && prevPoint.y < centerImage.rows &&
+									currPoint.x < centerImage.cols && currPoint.y < centerImage.rows) {
+									cv::line(centerImage, prevPoint, currPoint, cv::Scalar(0, 0, 0), 2);
+								}
+							}
+
+							for (const auto& point : pDlg->m_trackResult.trajectory) {
+								if (point.x >= 0 && point.y >= 0 &&
+									point.x < centerImage.cols && point.y < centerImage.rows) {
+									cv::circle(centerImage, point, 3, cv::Scalar(0, 0, 0), -1);
+								}
+							}
+						}
+
+						cv::putText(centerImage, "Tracking",
+							cv::Point(pDlg->m_trackResult.bbox.x, pDlg->m_trackResult.bbox.y - 10),
+							cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 0), 2);
+					}
+					else {
+						// è¾¹ç•Œæ¡†æ— æ•ˆï¼Œé‡ç½®è·Ÿè¸ªå™¨
+						cv::putText(centerImage, "Invalid Tracking Box", cv::Point(30, 40),
+							cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 0), 2);
+						pDlg->m_tracker->reset();
+						pDlg->m_enableTracking = false;
+					}
+				}
+				else {
+					cv::putText(centerImage, "Tracking Lost", cv::Point(30, 40),
+						cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 0), 2);
+					pDlg->m_tracker->reset();
+					pDlg->m_enableTracking = false;
+				}
+			}
+		}
+
+		// 5. æ›´æ–°æ˜¾ç¤ºå›¾åƒ
+		gray_host = centerImage;
+	}
+	else
+	{
+		// 6. å…³é—­è·Ÿè¸ªæ—¶çš„æ¸…ç†å·¥ä½œ
+		if (pDlg->m_enableTracking && pDlg->m_tracker) {
+			pDlg->m_tracker->reset();
+		}
+		pDlg->m_enableTracking = false;
+	}
+
+    // 7. å›¾åƒæ ¼å¼è½¬æ¢ï¼ˆä¸ºåç»­GPUå¤„ç†æˆ–å†™å›ç¼“å†²åŒºåšå‡†å¤‡ï¼‰
+    // å°†å¤„ç†åçš„ OpenCV Mat (gray_host) å›¾åƒæ•°æ®ï¼ˆ8ä½ï¼‰é‡æ–°è½¬æ¢ä¸º 16 ä½æ ¼å¼ï¼Œ
+    // å¹¶å­˜å‚¨å›å…¨å±€å›¾åƒç¼“å†²åŒº rImageã€‚
+    unsigned char* rdata;
+    rdata = gray_host.ptr<unsigned char>(0);
+    for (int i = 0; i < Height; i++)
+        for (int j = 0; j < Width; j++)
+            rImage[i * Width + j] = rdata[i * Width + j] << 8; // å·¦ç§»8ä½ï¼Œç›¸å½“äºä¹˜ä»¥256
+
+    // 8. ï¼ˆå¯é€‰ï¼‰è°ƒç”¨ GPU è¿›è¡Œå›¾åƒå¤„ç†
+    // æ£€æŸ¥ "IDC_GPU" å¤é€‰æ¡†æ˜¯å¦è¢«é€‰ä¸­
+    if (BST_CHECKED == ((CButton*)m_DlgPointer->GetDlgItem(IDC_GPU))->GetCheck())
+    {
+        // æ ¹æ®ä¹‹å‰æ£€æŸ¥çš„å…¶ä»–å¤é€‰æ¡†çŠ¶æ€ï¼ˆBlind_On, TP_On, Histogram_Onï¼‰ï¼Œ
+        // è°ƒç”¨ç›¸åº”çš„ CUDA å‡½æ•°åœ¨ GPU ä¸Šå¯¹ rImage è¿›è¡Œå¤„ç†ï¼ˆç›²å…ƒæ ¡æ­£ã€ä¸¤ç‚¹æ ¡æ­£ã€ç›´æ–¹å›¾å¢å¼ºï¼‰ã€‚
+        if(Blind_On > 0)
+            cudaStatus=GPU_Blind_Correction(Image,dev_img, dev_pBlind_Ram, Height,Width);
+        if(TP_On > 0)
+            cudaStatus=GPU_TwoPoint_Correction(Image,dev_img, dev_pTP_Gain,dev_pTP_Bias, Height, Width);
+        if (Histogram_On > 0)
+            cudaStatus = GPU_Histogram_Enhancement(Image, Histogram, Histogram_Float,dev_img, dev_Histogram, dev_Histogram_float, Height, Width);
+
+        // æ£€æŸ¥ CUDA è°ƒç”¨æ˜¯å¦å‡ºé”™
+        if (cudaStatus != cudaSuccess) {
+            fprintf(stderr, "addKernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
+            //goto Error; // å¯èƒ½çš„é”™è¯¯å¤„ç†è·³è½¬ç‚¹ï¼ˆè¢«æ³¨é‡Šæ‰äº†ï¼‰
+        }
+    }
+
+    // 9. å°†å¤„ç†åçš„å›¾åƒæ•°æ®å†™å› Sapera ç¼“å†²åŒº
+    // å°†ç»è¿‡ï¼ˆå¯èƒ½çš„ï¼‰GPUå¤„ç†åçš„å›¾åƒæ•°æ® rImage å†™å›åˆ° m_Buffers ç¼“å†²åŒºï¼Œ
+    // ä»¥ä¾¿ Sapera çš„ View å¯¹è±¡å¯ä»¥æ˜¾ç¤ºå®ƒã€‚
+    m_DlgPointer->m_Buffers->WriteRect(0, 0, Width, Height, Image);
+
+    // 10. æ›´æ–°å›¾åƒæ˜¾ç¤º
+    // è°ƒç”¨ Sapera View å¯¹è±¡çš„ Show æ–¹æ³•ï¼Œå°†ç¼“å†²åŒºä¸­çš„å›¾åƒå†…å®¹åˆ·æ–°åˆ°å…³è”çš„çª—å£æ§ä»¶ä¸Šã€‚
+    pDlg->m_View->Show();
+
+	
+   //---------å‘ç¼“å­˜åŒºä¸­å†™å›¾åƒ-----
    // BOOL WriteRect(int x, int y, int width, int height, const void* pData);
    
 
@@ -691,19 +1015,19 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
    // If grabbing in trash buffer, do not display the image, update the
    // appropriate number of frames on the status bar instead
  
-   //_________ÅĞ¶ÏÊÇ·ñÎªÀ¬»øÄÚÈİÔİÊ±Ã»×÷ÓÃ¡ª¡ªÉ¾µô_____
-/*   if (pInfo->IsTrash())  //ÅĞ¶ÏÊÇ·ñÎªÀ¬»øÄÚÈİ
+   //_________åˆ¤æ–­æ˜¯å¦ä¸ºåƒåœ¾å†…å®¹æš‚æ—¶æ²¡ä½œç”¨â€”â€”åˆ æ‰_____
+/*   if (pInfo->IsTrash())  //åˆ¤æ–­æ˜¯å¦ä¸ºåƒåœ¾å†…å®¹
    {
       CString str;
       str.Format(_T("Frames acquired in trash buffer: %d"), pInfo->GetEventCount());
       pDlg->m_statusWnd.SetWindowText(str);
    }
    
-   // Refresh view ĞèÒªÏÔÊ¾µÄÍ¼Ïñ½øĞĞ±£´æ
+   // Refresh view éœ€è¦æ˜¾ç¤ºçš„å›¾åƒè¿›è¡Œä¿å­˜
    else
    {
-	   //-------------------¶à·ù²É¼¯Í¼Ïñ----------------
-	   //---------±£´æÍ¼Æ¬µÄ¸ñÊ½--------
+	   //-------------------å¤šå¹…é‡‡é›†å›¾åƒ----------------
+	   //---------ä¿å­˜å›¾ç‰‡çš„æ ¼å¼--------
 	   if (Current_Saved < N_Saved_Frames)
 	   {
 		   Current_Saved++;
@@ -727,11 +1051,11 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 */
 	   //m_Buffers->Save(pBuf, "-format avi",-1, numSave);
 
-   //-----------NETD ¼ÆËã-------------
+   //-----------NETD è®¡ç®—-------------
    m_DlgPointer->CalculateNETD(Flag_NETD, Height, Width);
    
-	   //-------------------¶à·ù²É¼¯Í¼Ïñ----------------
-	   //---------±£´æÍ¼Æ¬µÄ¸ñÊ½--------
+	   //-------------------å¤šå¹…é‡‡é›†å›¾åƒ----------------
+	   //---------ä¿å­˜å›¾ç‰‡çš„æ ¼å¼--------
    if (Current_Saved < N_Saved_Frames)
    {
 	   Current_Saved++;
@@ -760,76 +1084,77 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 	   N_Saved_Frames = 0;
 	   Current_Saved = 0;
    }
-	  //ÏÔÊ¾Í¼Ïñ
+	  //æ˜¾ç¤ºå›¾åƒ
    
    
 }
 //==============================================================================
-// ¸¨Öúº¯Êı£ºÌáÈ¡ÖĞĞÄÊÓÍ¼²¢½«Æä·Å´ó»ØÔ­Ê¼³ß´ç
+// è¾…åŠ©å‡½æ•°ï¼šæå–ä¸­å¿ƒè§†å›¾å¹¶å°†å…¶æ”¾å¤§å›åŸå§‹å°ºå¯¸
 //==============================================================================
 cv::Mat CGrabDemoDlg::extractAndResizeCenterView(const cv::Mat& sourceImage)
 {
-	// 1. »ñÈ¡Ô­Ê¼Í¼Ïñ³ß´ç
+	// 1. è·å–åŸå§‹å›¾åƒå°ºå¯¸
 	int originalWidth = sourceImage.cols;
 	int originalHeight = sourceImage.rows;
 
-	// 2. ¶¨ÒåÖĞĞÄÊÓÍ¼µÄROI×ø±ê
-	// ÇøÓò5µÄ×ø±ê (1-based): {171, 350, 210, 420}
+	// 2. å®šä¹‰ä¸­å¿ƒè§†å›¾çš„ROIåæ ‡
+	// åŒºåŸŸ5çš„åæ ‡ (1-based): {171, 350, 210, 420}
 	int roi_x = 210 - 1;
 	int roi_y = 171 - 1;
 	int roi_width = 420 - roi_x;
 	int roi_height = 350 - roi_y;
 
-	// 3. ±ß½ç¼ì²é£¬·ÀÖ¹ROI³¬³öÍ¼Ïñ·¶Î§
+	// 3. è¾¹ç•Œæ£€æŸ¥ï¼Œé˜²æ­¢ROIè¶…å‡ºå›¾åƒèŒƒå›´
 	if (roi_x < 0 || roi_y < 0 ||
 		roi_x + roi_width > originalWidth || roi_y + roi_height > originalHeight)
 	{
-		// Èç¹ûROIÎŞĞ§£¬¿ÉÒÔ±¨´í»ò·µ»ØÒ»¸ö¿ÕMat
+		// å¦‚æœROIæ— æ•ˆï¼Œå¯ä»¥æŠ¥é”™æˆ–è¿”å›ä¸€ä¸ªç©ºMat
 		AfxMessageBox(_T("Center ROI is out of image bounds!"));
-		return cv::Mat(); // ·µ»ØÒ»¸ö¿ÕMat£¬µ÷ÓÃÕßĞèÒª¼ì²é
+		return cv::Mat(); // è¿”å›ä¸€ä¸ªç©ºMatï¼Œè°ƒç”¨è€…éœ€è¦æ£€æŸ¥
 	}
 
-	// 4. ÌáÈ¡ÖĞĞÄÊÓÍ¼
+	// 4. æå–ä¸­å¿ƒè§†å›¾
 	cv::Rect centerViewROI(roi_x, roi_y, roi_width, roi_height);
 	cv::Mat centerView = sourceImage(centerViewROI);
 
-	// 5. ½«ÖĞĞÄÊÓÍ¼·Å´ó»ØÔ­Ê¼³ß´ç²¢·µ»Ø
+	// 5. å°†ä¸­å¿ƒè§†å›¾æ”¾å¤§å›åŸå§‹å°ºå¯¸å¹¶è¿”å›
 	cv::Mat resizedView;
 	cv::resize(centerView, resizedView, cv::Size(originalWidth, originalHeight), 0, 0, cv::INTER_LINEAR);
 
 	return resizedView;
 }
-//»û±ä½ÃÕı
+//ç•¸å˜çŸ«æ­£
 void CGrabDemoDlg::localEnlarge(int Height, int Width)
 {
 	for (int i = 0; i < Height; i++)
 		for (int j = 0; j < Width; j++)
 			mImage[i * Width + j] = rImage[i * Width + j] >> 8;
-	// srcÎªÔ­Í¼Ïñ£¬grayÎª´¦ÀíºóÍ¼Ïñ£¬histÎªÖ±·½Í¼
+	// srcä¸ºåŸå›¾åƒï¼Œgrayä¸ºå¤„ç†åå›¾åƒï¼Œhistä¸ºç›´æ–¹å›¾
 	Mat src_host = Mat(Height, Width, CV_8UC1, mImage);
 
 	Mat gray_host;
 	gray_host = distortionCailbration.process(src_host);
-	////-------------------------Ö®Ç°--------------------------
-	//int cropHeight = Height / 2; // ÀıÈç£¬²Ã¼ôÇøÓò¸ß¶ÈÎªÔ­Ê¼¸ß¶ÈµÄÒ»°ë
-	//int cropWidth = Width / 2;   // ²Ã¼ôÇøÓò¿í¶ÈÎªÔ­Ê¼¿í¶ÈµÄÒ»°ë
-	//int startHeight = (Height - cropHeight) / 2; // ¼ÆËã²Ã¼ôÇøÓòµÄÆğÊ¼ĞĞ
-	//int startWidth = (Width - cropWidth) / 2;     // ¼ÆËã²Ã¼ôÇøÓòµÄÆğÊ¼ÁĞ
+	////-------------------------ä¹‹å‰--------------------------
+	//int cropHeight = Height / 2; // ä¾‹å¦‚ï¼Œè£å‰ªåŒºåŸŸé«˜åº¦ä¸ºåŸå§‹é«˜åº¦çš„ä¸€åŠ
+	//int cropWidth = Width / 2;   // è£å‰ªåŒºåŸŸå®½åº¦ä¸ºåŸå§‹å®½åº¦çš„ä¸€åŠ
+	//int startHeight = (Height - cropHeight) / 2; // è®¡ç®—è£å‰ªåŒºåŸŸçš„èµ·å§‹è¡Œ
+	//int startWidth = (Width - cropWidth) / 2;     // è®¡ç®—è£å‰ªåŒºåŸŸçš„èµ·å§‹åˆ—
 
-	//											  // ²Ã¼ôÍ¼Ïñ
+	//											  // è£å‰ªå›¾åƒ
 	//cv::Rect cropRegion(startWidth, startHeight, cropWidth, cropHeight);
 	//gray_host = src_host(cropRegion);
 	//cv::resize(gray_host, gray_host, cv::Size(Width, Height));
-	////---------------------------Ö®Ç°----------------------------
+	////---------------------------ä¹‹å‰----------------------------
  
 	
 
-	//------ Êä³ö²¿·Ö£º ½«Êı¾İ¸ñÊ½ 8 bits ±äÎª 16 bits ------------
+	//------ è¾“å‡ºéƒ¨åˆ†ï¼š å°†æ•°æ®æ ¼å¼ 8 bits å˜ä¸º 16 bits ------------
 	unsigned char* rdata;
 	rdata = gray_host.ptr<unsigned char>(0);
 	for (int i = 0; i < Height; i++)
 		for (int j = 0; j < Width; j++)
 			rImage[i * Width + j] = rdata[i * Width + j] << 8;
+
 }
 
 void CGrabDemoDlg::SignalCallback(SapAcqCallbackInfo *pInfo)
@@ -853,7 +1178,7 @@ BOOL CGrabDemoDlg::OnInitDialog()
    CRect rect;
 
    CDialog::OnInitDialog();
-   
+
    // Add "About..." menu item to system menu.
 
    // IDM_ABOUTBOX must be in the system command range.
@@ -890,7 +1215,7 @@ BOOL CGrabDemoDlg::OnInitDialog()
       // Define on-line objects
       m_Acq			= new SapAcquisition(dlg.GetAcquisition());
       m_Buffers	= new SapBufferWithTrash(2, m_Acq);
-      m_Xfer		= new SapAcqToBuf(m_Acq, m_Buffers, XferCallback, this);  //Ö´ĞĞ²¶»ñµ½buffer£¬½øÈë»Øµ÷º¯Êı
+      m_Xfer		= new SapAcqToBuf(m_Acq, m_Buffers, XferCallback, this);  //æ‰§è¡Œæ•è·åˆ°bufferï¼Œè¿›å…¥å›è°ƒå‡½æ•°
 //	  m_imageHeight = m_Buffers->GetHeight();
 //	  m_imageWidth = m_Buffers->GetWidth();
    }
@@ -920,42 +1245,42 @@ BOOL CGrabDemoDlg::OnInitDialog()
    // Get current input signal connection status
    GetSignalStatus();
 
-   //--------´®¿Ú²Ëµ¥À¸³õÊ¼»¯------------
+   //--------ä¸²å£èœå•æ åˆå§‹åŒ–------------
    m_Combo.AddString(_T("Xcelera-CL_PX4_1_Serial_0"));
    m_Combo.AddString(_T("Xcelera-CL_PX4_1_Serial_1"));
    m_Combo.AddString(_T("COM2"));
-   m_Combo.SetCurSel(0);//³õÊ¼Ê±ÏÂÀ­ÁĞ±íÎªCOM2
+   m_Combo.SetCurSel(0);//åˆå§‹æ—¶ä¸‹æ‹‰åˆ—è¡¨ä¸ºCOM2
 
-   //-------´®¿Ú´«ÊäËÙÂÊ--------------
+   //-------ä¸²å£ä¼ è¾“é€Ÿç‡--------------
    Comb_Rate.InsertString(0,_T("9600"));
    Comb_Rate.InsertString(1, _T("115200"));
-   Comb_Rate.SetCurSel(0);//³õÊ¼Ê±ÏÂÀ­ÁĞ±íÎª9600
+   Comb_Rate.SetCurSel(0);//åˆå§‹æ—¶ä¸‹æ‹‰åˆ—è¡¨ä¸º9600
 
-   //----------I2C ÅäÖÃ----------
-   Combe_I2CMode.InsertString(0,_T("2KÄ£Ê½"));
-   Combe_I2CMode.InsertString(1,_T("8KÄ£Ê½"));
+   //----------I2C é…ç½®----------
+   Combe_I2CMode.InsertString(0,_T("2Kæ¨¡å¼"));
+   Combe_I2CMode.InsertString(1,_T("8Kæ¨¡å¼"));
    Combe_I2CMode.InsertString(2,_T("QPSK"));
    Combe_I2CMode.InsertString(3,_T("16-QAM"));
    Combe_I2CMode.InsertString(4,_T("64-QAM"));
-   Combe_I2CMode.SetCurSel(0);//³õÊ¼Ê±ÏÂÀ­ÁĞ±íÎª9600
+   Combe_I2CMode.SetCurSel(0);//åˆå§‹æ—¶ä¸‹æ‹‰åˆ—è¡¨ä¸º9600
 
-   Combe_I2CBitSet.InsertString(0,_T("ÄÚ¾À´íÂëÂÊ£º1/2"));
-   Combe_I2CBitSet.InsertString(1,_T("ÄÚ¾À´íÂëÂÊ£º2/3"));
-   Combe_I2CBitSet.InsertString(2,_T("ÄÚ¾À´íÂëÂÊ£º3/4"));
-   Combe_I2CBitSet.InsertString(3,_T("ÄÚ¾À´íÂëÂÊ£º5/6"));
-   Combe_I2CBitSet.InsertString(4,_T("ÄÚ¾À´íÂëÂÊ£º7/8"));
-   Combe_I2CBitSet.SetCurSel(0);//³õÊ¼Ê±ÏÂÀ­ÁĞ±íÎª9600
+   Combe_I2CBitSet.InsertString(0,_T("å†…çº é”™ç ç‡ï¼š1/2"));
+   Combe_I2CBitSet.InsertString(1,_T("å†…çº é”™ç ç‡ï¼š2/3"));
+   Combe_I2CBitSet.InsertString(2,_T("å†…çº é”™ç ç‡ï¼š3/4"));
+   Combe_I2CBitSet.InsertString(3,_T("å†…çº é”™ç ç‡ï¼š5/6"));
+   Combe_I2CBitSet.InsertString(4,_T("å†…çº é”™ç ç‡ï¼š7/8"));
+   Combe_I2CBitSet.SetCurSel(0);//åˆå§‹æ—¶ä¸‹æ‹‰åˆ—è¡¨ä¸º9600
 
-   Combe_I2C_TimeSet.InsertString(0,_T("±£»¤¼ä¸ô£º1/4"));
-   Combe_I2C_TimeSet.InsertString(1,_T("±£»¤¼ä¸ô£º1/8"));
-   Combe_I2C_TimeSet.InsertString(2,_T("±£»¤¼ä¸ô£º1/16"));
-   Combe_I2C_TimeSet.InsertString(3,_T("±£»¤¼ä¸ô£º1/32"));
-   Combe_I2C_TimeSet.SetCurSel(0);//³õÊ¼Ê±ÏÂÀ­ÁĞ±íÎª9600
+   Combe_I2C_TimeSet.InsertString(0,_T("ä¿æŠ¤é—´éš”ï¼š1/4"));
+   Combe_I2C_TimeSet.InsertString(1,_T("ä¿æŠ¤é—´éš”ï¼š1/8"));
+   Combe_I2C_TimeSet.InsertString(2,_T("ä¿æŠ¤é—´éš”ï¼š1/16"));
+   Combe_I2C_TimeSet.InsertString(3,_T("ä¿æŠ¤é—´éš”ï¼š1/32"));
+   Combe_I2C_TimeSet.SetCurSel(0);//åˆå§‹æ—¶ä¸‹æ‹‰åˆ—è¡¨ä¸º9600
 
-   st.pWnd = this->GetSafeHwnd();  // »ñµÃµ±Ç°´°¿Ú¾ä±ú
+   st.pWnd = this->GetSafeHwnd();  // è·å¾—å½“å‰çª—å£å¥æŸ„
 
-   //--------³õÊ¼»¯Ê±¸üĞÂÍ¼Ïñ·Ö±æÂÊ----------
-   int Height = m_DlgPointer->m_Buffers->GetHeight();//»ñÈ¡µ±Ç°Í¼Ïñ´óĞ¡  768
+   //--------åˆå§‹åŒ–æ—¶æ›´æ–°å›¾åƒåˆ†è¾¨ç‡----------
+   int Height = m_DlgPointer->m_Buffers->GetHeight();//è·å–å½“å‰å›¾åƒå¤§å°  768
    int Width = m_DlgPointer->m_Buffers->GetWidth();   //1024
 
    mHeight = Height;
@@ -965,7 +1290,7 @@ BOOL CGrabDemoDlg::OnInitDialog()
    char str[10];
    int num;
    wchar_t *wide;
-   sprintf(str, "%d", imageBits);//×ª»»³É×Ö·û´®   
+   sprintf(str, "%d", imageBits);//è½¬æ¢æˆå­—ç¬¦ä¸²   
    num = MultiByteToWideChar(0, 0, str, -1, NULL, 0);
    wide = new wchar_t[num];
    MultiByteToWideChar(0, 0, str, -1, wide, num);
@@ -973,7 +1298,16 @@ BOOL CGrabDemoDlg::OnInitDialog()
 
    UpdateData(FALSE);
 
-   SetTimer(2, 1000, NULL);  //  µ¥Î»£ºms   //¼ÇÂ¼Ö¡ÆµÊ±¼ä
+   SetTimer(2, 1000, NULL);  //  å•ä½ï¼šms   //è®°å½•å¸§é¢‘æ—¶é—´
+
+	//åˆå§‹åŒ–äº‘é›¨é›¾æ­£å¸¸é€‰æ‹©é¡¹
+   m_comboBox.AddString(_T("æ­£å¸¸"));
+   m_comboBox.AddString(_T("äº‘"));
+   m_comboBox.AddString(_T("é›¾"));
+   m_comboBox.AddString(_T("é›¨"));
+   m_comboBox.AddString(_T("çƒŸ"));
+   m_comboBox.SetCurSel(0);
+
 
    try {
 	   TCHAR exePath[MAX_PATH];
@@ -983,23 +1317,58 @@ BOOL CGrabDemoDlg::OnInitDialog()
 
 	   size_t pos = strExePath.find_last_of("\\/");
 	   std::string exeDir = (pos != std::string::npos) ? strExePath.substr(0, pos) : "";
-	   std::string detect_enginePath = exeDir + "\\yolov8.engine";
+	   std::string detect_enginePath = exeDir + "\\yolov8_1017.engine";
 	   std::string depth_enginePath = exeDir + "\\depth_anything_v2_vits_518x616.engine";
-	   std::string super_enginePath = exeDir + "\\IINet_scale2_142x170.engine";
+	   std::string super_enginePath ;
+	   m_tracker = new TrackerUtils();
+	   // æ£€æŸ¥æ˜¯å¦æˆåŠŸåˆ›å»ºï¼Œå°½ç®¡ new é€šå¸¸ä¸ä¼šå¤±è´¥é™¤éå†…å­˜è€—å°½
+	   if (m_tracker == nullptr) {
+		   AfxMessageBox(_T("Failed to create TrackerUtils instance!"));
+		   // å¤„ç†é”™è¯¯ï¼Œå¯èƒ½éœ€è¦é€€å‡ºæˆ–ç¦ç”¨è·Ÿè¸ªåŠŸèƒ½
+	   }
+	   int nSelIndex = m_comboBox.GetCurSel();
+	   switch (nSelIndex)
+	   {
+	   case 0: // "æ­£å¸¸"
+		   //AfxMessageBox(_T("é€‰æ‹©äº†ï¼šæ­£å¸¸"));
+		   super_enginePath= exeDir + "\\IINet_scale2_142x170.engine";
+		   break;
+
+	   case 1: // "äº‘"
+		   //AfxMessageBox(_T("é€‰æ‹©äº†ï¼šäº‘"));
+           super_enginePath = exeDir + "\\IINet_scale2_142x170.engine";
+		   break;
+
+	   case 2: // "é›¾"
+		   //AfxMessageBox(_T("é€‰æ‹©äº†ï¼šé›¾"));
+           super_enginePath = exeDir + "\\IINet_scale2_142x170.engine";
+		   break;
+
+	   case 3: // "é›¨"
+		   //AfxMessageBox(_T("é€‰æ‹©äº†ï¼šé›¨"));
+           super_enginePath = exeDir + "\\IINet_scale2_142x170.engine";
+		   break;
+
+	   default:
+		   break;
+	   }
 	   m_super_tensorRT = new MyTensorRT(super_enginePath, true);
 	   m_depth_tensorRT = new MyTensorRT(depth_enginePath, true);
 	   m_detect_tensorRT = new MyTensorRT(detect_enginePath, true);
-	   //// Èç¹ûÄãÕıÔÚ²âÊÔ³¬·ÖÄ£ĞÍ:
+	   m_track_tensorRT = new MyTensorRT(detect_enginePath, true);
+	   //// å¦‚æœä½ æ­£åœ¨æµ‹è¯•è¶…åˆ†æ¨¡å‹:
 	   m_super_tensorRT->setModelType(ModelType::SuperResolution_IINet);
 	   m_depth_tensorRT->setModelType(ModelType::DepthEstimation_DepthAnything);
 	   m_detect_tensorRT->setModelType(ModelType::ObjectDetection_YOLOv8);
-	   ////gpu Ô¤ÈÈ
+	   m_track_tensorRT->setModelType(ModelType::ObjectDetection_YOLOv8);
+	   ////gpu é¢„çƒ­
 	   m_super_tensorRT->warmup(5);
 	   m_depth_tensorRT->warmup(5);
 	   m_detect_tensorRT->warmup(5);
-	   // --- ³¬·Ö±æÂÊµÄÍÆÀíÁ÷³Ì ---
-       // 1. ¼ÓÔØÒ»ÕÅµÍ·Ö±æÂÊµÄ²âÊÔÍ¼Æ¬
-       // ×¢Òâ£ºÕâÕÅÍ¼Æ¬µÄ³ß´ç±ØĞëÑÏ¸ñ·ûºÏÄ£ĞÍÊäÈëµÄ H ºÍ W
+	   m_track_tensorRT->warmup(5);
+	   // --- è¶…åˆ†è¾¨ç‡çš„æ¨ç†æµç¨‹ ---
+       // 1. åŠ è½½ä¸€å¼ ä½åˆ†è¾¨ç‡çš„æµ‹è¯•å›¾ç‰‡
+       // æ³¨æ„ï¼šè¿™å¼ å›¾ç‰‡çš„å°ºå¯¸å¿…é¡»ä¸¥æ ¼ç¬¦åˆæ¨¡å‹è¾“å…¥çš„ H å’Œ W
 	   // cv::Mat lr_image = cv::imread(exeDir + "\\001_2.png" , cv::IMREAD_GRAYSCALE);
 
 	   //DWORD start, end;
@@ -1007,112 +1376,130 @@ BOOL CGrabDemoDlg::OnInitDialog()
 
 	   //start = GetTickCount();
 
-	   //// 2. Ô¤´¦Àí (µ÷ÓÃ³¬·Ö×¨ÓÃµÄº¯Êı)
+	   //// 2. é¢„å¤„ç† (è°ƒç”¨è¶…åˆ†ä¸“ç”¨çš„å‡½æ•°)
 	   //m_super_tensorRT->preprocessImage_LightField(lr_image,3);
 
-	   //// 3. Ö´ĞĞÍÆÀí (¸´ÓÃÍ¨ÓÃµÄÍÆÀíº¯Êı)
+	   //// 3. æ‰§è¡Œæ¨ç† (å¤ç”¨é€šç”¨çš„æ¨ç†å‡½æ•°)
 	   //m_super_tensorRT->inference(1);
 
-	   //// 4. ºó´¦Àí (µ÷ÓÃ³¬·Ö×¨ÓÃµÄº¯Êı)
+	   //// 4. åå¤„ç† (è°ƒç”¨è¶…åˆ†ä¸“ç”¨çš„å‡½æ•°)
 	   //cv::Mat sr_result = m_super_tensorRT->postprocessOutput_Super(1);
 	   //m_depth_tensorRT->preprocessImage_Depth(sr_result);
 
-	   //// 2. Ö´ĞĞÍÆÀí (¸´ÓÃÍ¨ÓÃµÄÍÆÀíº¯Êı)
+	   //// 2. æ‰§è¡Œæ¨ç† (å¤ç”¨é€šç”¨çš„æ¨ç†å‡½æ•°)
 	   //m_depth_tensorRT->inference(1);
 
-	   //// 3. ºó´¦Àí (µ÷ÓÃĞÂÔöµÄÉî¶È×¨ÓÃº¯Êı)
+	   //// 3. åå¤„ç† (è°ƒç”¨æ–°å¢çš„æ·±åº¦ä¸“ç”¨å‡½æ•°)
 	   //cv::Mat depth_result = m_depth_tensorRT->postprocessOutput_Depth(1);
 	   //end = GetTickCount();
 	   //processTime = end - start;
 
-	   ////// ÏÔÊ¾½á¹û
+	   ////// æ˜¾ç¤ºç»“æœ
 	   //CString msg;
-	   //msg.Format(_T("Éî¶È¹À¼ÆÍê³É, »¨·ÑÊ±¼ä %d ºÁÃë"), processTime);
-	   //MessageBox(msg, _T("´¦Àí½á¹û"), MB_OK | MB_ICONINFORMATION);
+	   //msg.Format(_T("æ·±åº¦ä¼°è®¡å®Œæˆ, èŠ±è´¹æ—¶é—´ %d æ¯«ç§’"), processTime);
+	   //MessageBox(msg, _T("å¤„ç†ç»“æœ"), MB_OK | MB_ICONINFORMATION);
 	   //cv::Mat final_display_img;
 	   //cv::cvtColor(depth_result, final_display_img, cv::COLOR_BGR2GRAY);
-	   //// ÔÚ´°¿ÚÖĞÏÔÊ¾Ô­Ê¼Í¼ÏñºÍÉî¶ÈÍ¼
+	   //// åœ¨çª—å£ä¸­æ˜¾ç¤ºåŸå§‹å›¾åƒå’Œæ·±åº¦å›¾
 	   //cv::imshow("Original Image", sr_result);
 	   //cv::imshow("Depth Result", final_display_img);
-	   //cv::waitKey(0); // µÈ´ı°´¼üºó¹Ø±Õ´°¿Ú
+	   //cv::waitKey(0); // ç­‰å¾…æŒ‰é”®åå…³é—­çª—å£
 	   // 
-	   //// 5. ÏÔÊ¾ºÍ±£´æ½á¹û
+	   //// 5. æ˜¾ç¤ºå’Œä¿å­˜ç»“æœ
 	   //CString msg;
-	   //msg.Format(_T("³¬·Ö±æÂÊÍê³É, »¨·ÑÊ±¼ä %d ºÁÃë"), processTime);
-	   //MessageBox(msg, _T("´¦Àí½á¹û"), MB_OK | MB_ICONINFORMATION);
+	   //msg.Format(_T("è¶…åˆ†è¾¨ç‡å®Œæˆ, èŠ±è´¹æ—¶é—´ %d æ¯«ç§’"), processTime);
+	   //MessageBox(msg, _T("å¤„ç†ç»“æœ"), MB_OK | MB_ICONINFORMATION);
 
-	   //// ÔÚ´°¿ÚÖĞÏÔÊ¾ÊäÈëµÄµÍ·Ö±æÂÊÍ¼ºÍÊä³öµÄ¸ß·Ö±æÂÊÍ¼
+	   //// åœ¨çª—å£ä¸­æ˜¾ç¤ºè¾“å…¥çš„ä½åˆ†è¾¨ç‡å›¾å’Œè¾“å‡ºçš„é«˜åˆ†è¾¨ç‡å›¾
 	   //cv::imshow("Low-Resolution Input", lr_image);
 	   //cv::imshow("Super-Resolution Result", sr_result);
-	   //cv::waitKey(0); // µÈ´ı°´¼üºó¹Ø±Õ´°¿Ú
+	   //cv::waitKey(0); // ç­‰å¾…æŒ‰é”®åå…³é—­çª—å£
 	   // 
-	   //TODO Éî¶È¹À¼Æ±¾µØÎÄ¼ş²âÊÔ£¬ÕıÊ½Ê¹ÓÃÒÔÏÂÆÁ±Î
+	   //TODO æ·±åº¦ä¼°è®¡æœ¬åœ°æ–‡ä»¶æµ‹è¯•ï¼Œæ­£å¼ä½¿ç”¨ä»¥ä¸‹å±è”½
 	   //cv::Mat testMat = cv::imread(exeDir + "\\001_8.png");
 	   //DWORD start, end;
 	   //DWORD processTime;
 
-	   //// --- Éî¶È¹À¼ÆµÄÍÆÀíÁ÷³Ì ---
+	   //// --- æ·±åº¦ä¼°è®¡çš„æ¨ç†æµç¨‹ ---
 	   //start = GetTickCount();
 
-	   //// 1. Ô¤´¦Àí (µ÷ÓÃĞÂÔöµÄÉî¶È×¨ÓÃº¯Êı)
+	   //// 1. é¢„å¤„ç† (è°ƒç”¨æ–°å¢çš„æ·±åº¦ä¸“ç”¨å‡½æ•°)
 	   //m_tensorRT->preprocessImage_Depth(testMat);
 
-	   //// 2. Ö´ĞĞÍÆÀí (¸´ÓÃÍ¨ÓÃµÄÍÆÀíº¯Êı)
+	   //// 2. æ‰§è¡Œæ¨ç† (å¤ç”¨é€šç”¨çš„æ¨ç†å‡½æ•°)
 	   //m_tensorRT->inference(1);
 
-	   //// 3. ºó´¦Àí (µ÷ÓÃĞÂÔöµÄÉî¶È×¨ÓÃº¯Êı)
+	   //// 3. åå¤„ç† (è°ƒç”¨æ–°å¢çš„æ·±åº¦ä¸“ç”¨å‡½æ•°)
 	   //cv::Mat depth_result = m_tensorRT->postprocessOutput_Depth(1);
 
 	   //end = GetTickCount();
 	   //processTime = end - start;
 
-	   //// ÏÔÊ¾½á¹û
+	   //// æ˜¾ç¤ºç»“æœ
 	   //CString msg;
-	   //msg.Format(_T("Éî¶È¹À¼ÆÍê³É, »¨·ÑÊ±¼ä %d ºÁÃë"), processTime);
-	   //MessageBox(msg, _T("´¦Àí½á¹û"), MB_OK | MB_ICONINFORMATION);
+	   //msg.Format(_T("æ·±åº¦ä¼°è®¡å®Œæˆ, èŠ±è´¹æ—¶é—´ %d æ¯«ç§’"), processTime);
+	   //MessageBox(msg, _T("å¤„ç†ç»“æœ"), MB_OK | MB_ICONINFORMATION);
 	   //cv::Mat final_display_img;
 	   //cv::cvtColor(depth_result, final_display_img, cv::COLOR_BGR2GRAY);
-	   //// ÔÚ´°¿ÚÖĞÏÔÊ¾Ô­Ê¼Í¼ÏñºÍÉî¶ÈÍ¼
+	   //// åœ¨çª—å£ä¸­æ˜¾ç¤ºåŸå§‹å›¾åƒå’Œæ·±åº¦å›¾
 	   //cv::imshow("Original Image", testMat);
 	   //cv::imshow("Depth Result", final_display_img);
-	   //cv::waitKey(0); // µÈ´ı°´¼üºó¹Ø±Õ´°¿Ú
-	   //TODOYOLOv8±¾µØÎÄ¼ş²âÊÔ£¬ÕıÊ½Ê¹ÓÃÒÔÏÂÆÁ±Î
-	   //cv::Mat testMat = cv::imread(exeDir + "\\001_7.png" , cv::IMREAD_GRAYSCALE);
+	   //cv::waitKey(0); // ç­‰å¾…æŒ‰é”®åå…³é—­çª—å£
+	   //TODOYOLOv8æœ¬åœ°æ–‡ä»¶æµ‹è¯•ï¼Œæ­£å¼ä½¿ç”¨ä»¥ä¸‹å±è”½
+	   //cv::Mat testMat = cv::imread(exeDir + "\\001_10.png" , cv::IMREAD_GRAYSCALE);
 	   //DWORD start, end;
 	   //DWORD engineProcessTime;
-	   ////Ô¤´¦Àí
+	   ////é¢„å¤„ç†
 	   //start = GetTickCount();
-	   //m_tensorRT->preprocessImage(testMat);
-	   //// Ö´ĞĞÍÆÀí
-	   //m_tensorRT->inference(1);
-	   //// ºó´¦Àí
-	   //std::vector<Detection> detections = m_tensorRT->postprocessOutputYOLOV8(1);
+	   //m_detect_tensorRT->preprocessImage_Detect(testMat);
+	   //// æ‰§è¡Œæ¨ç†
+	   //m_detect_tensorRT->inference(1);
+	   //// åå¤„ç†
+	   //std::vector<Detection> detections = m_detect_tensorRT->postprocessOutputYOLOV8(1);
 	   //end = GetTickCount();
 	   //engineProcessTime = end - start;
 	   //CString msg;
-	   //msg.Format(_T("¼ì²âµ½ %d ¸öÄ¿±ê, »¨·ÑÊ±¼ä %d ºÁÃë"), detections.size(), engineProcessTime);
+	   //msg.Format(_T("æ£€æµ‹åˆ° %d ä¸ªç›®æ ‡, èŠ±è´¹æ—¶é—´ %d æ¯«ç§’"), detections.size(), engineProcessTime);
 
-	   //MessageBox(msg, _T("¼ì²â½á¹û"), MB_OK | MB_ICONINFORMATION);
+	   //MessageBox(msg, _T("æ£€æµ‹ç»“æœ"), MB_OK | MB_ICONINFORMATION);
 	   //for (const auto& det : detections) {
 		  // cv::rectangle(testMat,
 			 //  cv::Point(det.x, det.y),
 			 //  cv::Point(det.x + det.width, det.y + det.height),
 			 //  cv::Scalar(0, 255, 0), 2);
 		  // cv::putText(testMat,
-			 //  m_tensorRT->getClassName(det.classId) + " " + std::to_string(det.confidence),
+			 //  m_detect_tensorRT->getClassName(det.classId) + " " + std::to_string(det.confidence),
 			 //  cv::Point(det.x, det.y - 5),
 			 //  cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
 	   //}
 	   //cv::imshow("detectResult",testMat);
 	   //cv::waitKey(0);
-	   //TODO±¾µØÎÄ¼ş²âÊÔ£¬ÕıÊ½Ê¹ÓÃÒÔÉÏÆÁ±Î
+	   //TODOæœ¬åœ°æ–‡ä»¶æµ‹è¯•ï¼Œæ­£å¼ä½¿ç”¨ä»¥ä¸Šå±è”½
    }
    catch (const std::exception& e) {
 	   CString errorMsg;  
-	   errorMsg.Format(_T("³õÊ¼»¯ TensorRT Ê§°Ü:\n%hs"), e.what());
-	   MessageBox(errorMsg, _T("´íÎó"), MB_OK | MB_ICONERROR);
+	   errorMsg.Format(_T("åˆå§‹åŒ– TensorRT å¤±è´¥:\n%hs"), e.what());
+	   MessageBox(errorMsg, _T("é”™è¯¯"), MB_OK | MB_ICONERROR);
 	   return FALSE;
    }
+
+
+  // CButton* supercheckItem = (CButton*)GetDlgItem(IDC_SUPER_CHECK);  // è·å–è§†è§’åˆæˆID
+  // CButton* depthcheckItem = (CButton*)GetDlgItem(IDC_DEPTH_CHECK);  // è·å–æ·±åº¦ä¼°è®¡ID
+  // CButton* jibiancheckItem = (CButton*)GetDlgItem(IDC_Local_Enlarge); //è·å–ç•¸å˜çŸ«æ­£ID
+  // CButton* mubiaocheckItem = (CButton*)GetDlgItem(IDC_DETECTION_CHECK); //è·å–ç›®æ ‡æ£€æµ‹ID
+
+  // if (supercheckItem && depthcheckItem&& jibiancheckItem&& mubiaocheckItem)
+  // {
+
+		//depthcheckItem->EnableWindow(FALSE); 
+  //      mubiaocheckItem->EnableWindow(FALSE);
+  //      supercheckItem->EnableWindow(FALSE);
+  // }
+
+
+
+
    return TRUE;  // return TRUE  unless you set the focus to a control
 }
 
@@ -1158,8 +1545,8 @@ BOOL CGrabDemoDlg::CreateObjects()
       return FALSE;
    }
 
-   //---------------³õÊ¼»¯Êı×é-------------------
-   memset(rHot_Ram, 78, 1280 * 1024 * sizeof(unsigned short));   //0~255 °ËÎ»¶ş½øÖÆÊı½øĞĞÌî³ä ËùÒÔÓÃ78 ¶ÔÓ¦ 20000×óÓÒ
+   //---------------åˆå§‹åŒ–æ•°ç»„-------------------
+   memset(rHot_Ram, 78, 1280 * 1024 * sizeof(unsigned short));   //0~255 å…«ä½äºŒè¿›åˆ¶æ•°è¿›è¡Œå¡«å…… æ‰€ä»¥ç”¨78 å¯¹åº” 20000å·¦å³
    memset(rBlind_Ram, 0, 1280 * 1024 * sizeof(unsigned short));
 
    return TRUE;
@@ -1358,8 +1745,8 @@ void CGrabDemoDlg::UpdateMenu( void)
    if (!GetFocus())
       GetDlgItem(IDC_EXIT)->SetFocus();
 
-   //---------³õÊ¼»¯´®¿Ú¿ª¹Ø------------
-   //GetDlgItem(FPGA_HE)->SetWindowText(_T("ÔöÇ¿_´ò¿ª"));
+   //---------åˆå§‹åŒ–ä¸²å£å¼€å…³------------
+   //GetDlgItem(FPGA_HE)->SetWindowText(_T("å¢å¼º_æ‰“å¼€"));
 }
 
 
@@ -1384,7 +1771,7 @@ void CGrabDemoDlg::OnGrab()
 {
    m_statusWnd.SetWindowText(_T(""));
 
-   if( m_Xfer->Grab())  //¿ªÊ¼Á¬Ğø´«Êä
+   if( m_Xfer->Grab())  //å¼€å§‹è¿ç»­ä¼ è¾“
    {
       UpdateMenu();	
    }
@@ -1500,7 +1887,7 @@ void CGrabDemoDlg::OnBufferOptions()
          *m_Buffers = buf;
          CreateObjects();
       }
-	  //¸Ä±äbufferÉèÖÃ£¬¸üĞÂÍ¼Ïñ´óĞ¡
+	  //æ”¹å˜bufferè®¾ç½®ï¼Œæ›´æ–°å›¾åƒå¤§å°
 //	  m_imageHeight = m_Buffers->GetHeight();
 //	  m_imageWidth = m_Buffers->GetWidth();
 
@@ -1542,11 +1929,11 @@ void CGrabDemoDlg::OnFileLoad()
    }
 }
 
-//  Save°´¼ü  ±£´æµ¥Ö¡Í¼Ïñ
+//  SaveæŒ‰é”®  ä¿å­˜å•å¸§å›¾åƒ
 void CGrabDemoDlg::OnFileSave() 
 {
-	int Height = m_DlgPointer->m_Buffers->GetHeight();//»ñÈ¡µ±Ç°Í¼Ïñ´óĞ¡  768
-	int Width = m_DlgPointer->m_Buffers->GetWidth();   //1024
+	int Height = m_DlgPointer->m_Buffers->GetHeight();
+	int Width = m_DlgPointer->m_Buffers->GetWidth(); 
 	CString fileName = m_cstrWorkPath;
 	CTime time = CTime::GetCurrentTime();
 	fileName += time.Format(_T("\\single-%b-%d-%H-%M-%S.raw"));
@@ -1554,17 +1941,42 @@ void CGrabDemoDlg::OnFileSave()
 	wcstombs(szStr, fileName, fileName.GetLength());
 	const char* pBuf = szStr;
 	m_Buffers->Save(pBuf,"-format raw");
-  // SaveSingleFrame();
 	CString pngFileName = fileName.Left(fileName.GetLength() - 4) + _T(".png");
-	for (int i = 0; i < Height; i++)
-		for (int j = 0; j < Width; j++)
-			mImage[i * Width + j] = rImage[i * Width + j] >> 8;
+
+	CButton* supercheckItem = (CButton*)GetDlgItem(IDC_SUPER_CHECK);  
+	CButton* depthcheckItem = (CButton*)GetDlgItem(IDC_DEPTH_CHECK);  
+	CButton* jibiancheckItem = (CButton*)GetDlgItem(IDC_Local_Enlarge); 
+	CButton* mubiaocheckItem = (CButton*)GetDlgItem(IDC_DETECTION_CHECK); 
+
+	if (supercheckItem && depthcheckItem && jibiancheckItem && mubiaocheckItem)
+	{
+		if (jibiancheckItem->GetCheck() == BST_CHECKED&&
+			depthcheckItem->GetCheck() == BST_UNCHECKED&&
+			supercheckItem->GetCheck() == BST_CHECKED&&
+			mubiaocheckItem->GetCheck() == BST_UNCHECKED)
+		{
+			CString highResPngFileName = fileName.Left(fileName.GetLength() - 4) + _T("_highres.png");
+
+			if (m_DlgPointer->m_saiHost.empty()) {
+
+				Mat defaultImage = Mat::zeros(179, 210, CV_8UC1);
+				cv::imwrite(std::string(CT2CA(highResPngFileName)), defaultImage);
+				AfxMessageBox(_T("é”™è¯¯: m_saiHostä¸ºç©ºï¼Œå°†åˆ›å»ºé»˜è®¤å›¾åƒ"));
+			} else {
+				cv::imwrite(std::string(CT2CA(highResPngFileName)), m_DlgPointer->m_saiHost);
+			}
+		}
+		else
+		{
+			for (int i = 0; i < Height; i++)
+				for (int j = 0; j < Width; j++)
+					mImage[i * Width + j] = rImage[i * Width + j] >> 8;
+			Mat src_png = Mat(Height, Width, CV_8UC1, mImage);
+			cv::imwrite(std::string(CT2CA(pngFileName)), src_png);
+		}
+	}
 	Mat src_png = Mat(Height, Width, CV_8UC1, mImage);
 	cv::imwrite(std::string(CT2CA(pngFileName)), src_png);
-
-	//ÊÖ¶¯Ñ¡Ôñ±£´æÂ·¾¶
-	// dlg.DoModal();
-	// CLoadSaveDlg dlg(this, m_Buffers, FALSE);
 }
 
 void CGrabDemoDlg::GetSignalStatus()
@@ -1593,13 +2005,13 @@ void CGrabDemoDlg::GetSignalStatus(SapAcquisition::SignalStatus signalStatus)
 }
 
 
-//  ²É¼¯¶àÖ¡Í¼Ïñ
+//  é‡‡é›†å¤šå¸§å›¾åƒ
 void CGrabDemoDlg::OnBnClickedSavemulti()
 {
-	// TODO: ÔÚ´ËÌí¼Ó¿Ø¼şÍ¨Öª´¦Àí³ÌĞò´úÂë
-	// »ñÈ¡Á¬Ğø²É¼¯µÄÖ¡Êı
+	// TODO: åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
+	// è·å–è¿ç»­é‡‡é›†çš„å¸§æ•°
 	CString nFrames;
-	int numSave;		//²É¼¯µÄÖ¡ÆµÊı
+	int numSave;		//é‡‡é›†çš„å¸§é¢‘æ•°
 	//GetDlgItem(IDC_Frame_Count)->GetWindowTextW(nFrames);
 	GetDlgItemText(IDC_Frame_Count, nFrames);
 	numSave = _ttoi(nFrames);
@@ -1609,7 +2021,7 @@ void CGrabDemoDlg::OnBnClickedSavemulti()
 		numSave = 0;
 	}
 		
-/*	//---------±£´æÍ¼Æ¬µÄ¸ñÊ½--------
+/*	//---------ä¿å­˜å›¾ç‰‡çš„æ ¼å¼--------
 	CString fileName = m_cstrWorkPath;
 	CTime time = CTime::GetCurrentTime();
 	fileName += time.Format(_T("\\MultiSaved-%b-%d-%H-%M-%S.bmp"));
@@ -1620,7 +2032,7 @@ void CGrabDemoDlg::OnBnClickedSavemulti()
 */
 	N_Saved_Frames = numSave;
 	
-	// demoÀı³Ì ±£´æaviÎÄ¼ş
+	// demoä¾‹ç¨‹ ä¿å­˜aviæ–‡ä»¶
 /*	if ((m_Buffers->GetFormat() == SapFormatMono16) ||
 		(m_Buffers->GetFormat() == SapFormatRGB101010) ||
 		(m_Buffers->GetFormat() == SapFormatRGB161616) ||
@@ -1639,7 +2051,7 @@ void CGrabDemoDlg::OnBnClickedSavemulti()
 */
 }
 
-//ÊµÏÖ¶¨Ê±Æ÷ 
+//å®ç°å®šæ—¶å™¨ 
 void CGrabDemoDlg::OnTimer(UINT_PTR nIDEvent) {
 	char   str[20];
 	int num;
@@ -1647,7 +2059,7 @@ void CGrabDemoDlg::OnTimer(UINT_PTR nIDEvent) {
 	HWND hWnd;
 	switch (nIDEvent)
 	{
-	case 0:  //¶¨Ê±Æ÷´¦Àí³ÌĞò
+	case 0:  //å®šæ—¶å™¨å¤„ç†ç¨‹åº
 		CGrabDemoDlg::OnFileSave();
 		//MessageBox(_T("Time is on !"));
 		break;
@@ -1659,14 +2071,14 @@ void CGrabDemoDlg::OnTimer(UINT_PTR nIDEvent) {
 			KillTimer(1);
 		break;
 	case 2:
-		sprintf(str, "%d", frame_count);//×ª»»³É×Ö·û´®   
+		sprintf(str, "%d", frame_count+1);//è½¬æ¢æˆå­—ç¬¦ä¸²   
 		num = MultiByteToWideChar(0, 0, str, -1, NULL, 0);
 		wide = new wchar_t[num];
 		//delete[] wide;
 		MultiByteToWideChar(0, 0, str, -1, wide, num);
 		((CButton*)m_DlgPointer->GetDlgItem(FPGA_frames))->SetWindowText(wide);
-		//---------¼ÆËã´«ÊäËÙÂÊ----------------
-		sprintf(str, "%.4f", float(frame_count)*mHeight*mWidth*imageBits/1000000);//×ª»»³É×Ö·û´®   
+		//---------è®¡ç®—ä¼ è¾“é€Ÿç‡----------------
+		sprintf(str, "%.4f", float(frame_count)*mHeight*mWidth*imageBits/1000000);//è½¬æ¢æˆå­—ç¬¦ä¸²   
 		num = MultiByteToWideChar(0, 0, str, -1, NULL, 0);
 		wide = new wchar_t[num];
 		MultiByteToWideChar(0, 0, str, -1, wide, num);
@@ -1675,7 +2087,7 @@ void CGrabDemoDlg::OnTimer(UINT_PTR nIDEvent) {
 		//GetDlgItem(FPGA_frames)->SetWindowText((LPCTSTR)str);
 		frame_count = 0;
 		//Frame_Count = 0;
-		//-------------·¢ËÍÊó±êÒÆ¶¯ÏûÏ¢--------
+		//-------------å‘é€é¼ æ ‡ç§»åŠ¨æ¶ˆæ¯--------
 		//hWnd = AfxGetMainWnd()->m_hWnd;
 		//PostMessage( WM_MOUSEMOVE, 1,NULL);
 		SendMessage(WM_MOUSEMOVE, MK_SHIFT, 0x12345678);
@@ -1686,26 +2098,26 @@ void CGrabDemoDlg::OnTimer(UINT_PTR nIDEvent) {
 }
 
 
-//	¶¨Ê±²É¼¯Ä£Ê½£¬´ò¿ª¶¨Ê±Æ÷£¬¶ÁÈ¡Ê±³¤£¬¿ªÊ¼²É¼¯
-//	ĞèÒª¿¼ÂÇºÎÊ±¹Ø±ÕµÄÎÊÌâ£º°´ÁËÆäËû±£´æÄ£Ê½£¬»òÍË³ö³ÌĞò¡£
+//	å®šæ—¶é‡‡é›†æ¨¡å¼ï¼Œæ‰“å¼€å®šæ—¶å™¨ï¼Œè¯»å–æ—¶é•¿ï¼Œå¼€å§‹é‡‡é›†
+//	éœ€è¦è€ƒè™‘ä½•æ—¶å…³é—­çš„é—®é¢˜ï¼šæŒ‰äº†å…¶ä»–ä¿å­˜æ¨¡å¼ï¼Œæˆ–é€€å‡ºç¨‹åºã€‚
 void CGrabDemoDlg::OnBnClickedSaveTiming()
 {
-	// TODO: ÔÚ´ËÌí¼Ó¿Ø¼şÍ¨Öª´¦Àí³ÌĞò´úÂë
+	// TODO: åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
 	//MessageBox(_T("Button is on !"));
-	// »ñÈ¡Á¬Ğø²É¼¯µÄÖ¡Êı
+	// è·å–è¿ç»­é‡‡é›†çš„å¸§æ•°
 	CString strTime;
-	int nMS;		//²É¼¯µÄÖ¡ÆµÊı
+	int nMS;		//é‡‡é›†çš„å¸§é¢‘æ•°
 						//GetDlgItem(IDC_Frame_Count)->GetWindowTextW(nFrames);
 	GetDlgItemText(IDC_nMS, strTime);
 	nMS = _ttoi(strTime);
 
-	SetTimer(0, nMS,NULL);   // µÚ¶ş¸ö²ÎÊıÎªx ms
+	SetTimer(0, nMS,NULL);   // ç¬¬äºŒä¸ªå‚æ•°ä¸ºx ms
 }
 
 
 void CGrabDemoDlg::OnBnClickedTimingStop()
 {
-	// TODO: ÔÚ´ËÌí¼Ó¿Ø¼şÍ¨Öª´¦Àí³ÌĞò´úÂë
+	// TODO: åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
 	KillTimer(0);
 }
 
@@ -1726,7 +2138,7 @@ void CGrabDemoDlg::OnBnClickedTimingStop()
 //
 //	printf("{1,2,3,4,5} + {10,20,30,40,50} = {%d,%d,%d,%d,%d}\n",
 //		c[0], c[1], c[2], c[3], c[4]);
-//	printf("cuda¹¤³ÌÖĞµ÷ÓÃcpp³É¹¦£¡\n");
+//	printf("cudaå·¥ç¨‹ä¸­è°ƒç”¨cppæˆåŠŸï¼\n");
 //
 //	// cudaDeviceReset must be called before exiting in order for profiling and  
 //	// tracing tools such as Nsight and Visual Profiler to show complete traces.  
@@ -1740,31 +2152,31 @@ void CGrabDemoDlg::OnBnClickedTimingStop()
 //}
 
 
-//--------------------µÍÎÂ±¾µ×°´¼ü-----------------
+//--------------------ä½æ¸©æœ¬åº•æŒ‰é”®-----------------
 void CGrabDemoDlg::OnBnClickedTpCold()
 {
-	// ²É¼¯µÍÎÂ±¾µ×Í¼ÏñĞÅÏ¢£¬±£´æÈç Cold_Ram
-	int Height = m_DlgPointer->m_Buffers->GetHeight();//»ñÈ¡µ±Ç°Í¼Ïñ´óĞ¡  768
+	// é‡‡é›†ä½æ¸©æœ¬åº•å›¾åƒä¿¡æ¯ï¼Œä¿å­˜å¦‚ Cold_Ram
+	int Height = m_DlgPointer->m_Buffers->GetHeight();//è·å–å½“å‰å›¾åƒå¤§å°  768
 	int Width = m_DlgPointer->m_Buffers->GetWidth();   //1024
 	m_DlgPointer->m_Buffers->ReadRect(0, 0, Width, Height, Cold_Ram);
 }
 
-//--------------------¸ßÎÂ±¾µ×°´¼ü-----------------
+//--------------------é«˜æ¸©æœ¬åº•æŒ‰é”®-----------------
 void CGrabDemoDlg::OnBnClickedTpHot()
 {
-	// ²É¼¯¸ßÎÂ±¾µ×Í¼ÏñĞÅÏ¢£¬±£´æÈç Hot_Ram
-	int Height = m_DlgPointer->m_Buffers->GetHeight();//»ñÈ¡µ±Ç°Í¼Ïñ´óĞ¡  768
+	// é‡‡é›†é«˜æ¸©æœ¬åº•å›¾åƒä¿¡æ¯ï¼Œä¿å­˜å¦‚ Hot_Ram
+	int Height = m_DlgPointer->m_Buffers->GetHeight();//è·å–å½“å‰å›¾åƒå¤§å°  768
 	int Width = m_DlgPointer->m_Buffers->GetWidth();   //1024
 	m_DlgPointer->m_Buffers->ReadRect(0, 0, Width, Height, Hot_Ram);
 
-/*	//------------------²âÊÔĞ§¹û------------------
-	//¿ªÊ¼Ê±£¬ÏÈµã»÷GPU£¬¿ª±ÙÄÚ´æ£¬È»ºó¸ßÎÂ±¾µ×²É¼¯£¬È»ºóÏÔÊ¾
-	//------Á½µã½ÃÕı²âÊÔ------
+/*	//------------------æµ‹è¯•æ•ˆæœ------------------
+	//å¼€å§‹æ—¶ï¼Œå…ˆç‚¹å‡»GPUï¼Œå¼€è¾Ÿå†…å­˜ï¼Œç„¶åé«˜æ¸©æœ¬åº•é‡‡é›†ï¼Œç„¶åæ˜¾ç¤º
+	//------ä¸¤ç‚¹çŸ«æ­£æµ‹è¯•------
 	for (int i = 0; i < 50; i++)
 	for (int j = 0; j < 50; j++)
 	Hot_Ram[j + i * 1024] = 10000;
 
-	//-------Ã¤Ôª²âÊÔ-----
+	//-------ç›²å…ƒæµ‹è¯•-----
 	for (int i = 700; i < 768; i=i+3)
 	for (int j = 980; j < 1024; j=j+3)
 	Hot_Ram[j + i * 1024] = 50;
@@ -1774,18 +2186,18 @@ void CGrabDemoDlg::OnBnClickedTpHot()
 
 
 	//-------------------------------------------------------
-	//					Á½µã½ÃÕıÊµÏÖ
+	//					ä¸¤ç‚¹çŸ«æ­£å®ç°
 	//-------------------------------------------------------
-	//¼ÆËãÁ½µã½ÃÕı²ÎÊı
+	//è®¡ç®—ä¸¤ç‚¹çŸ«æ­£å‚æ•°
 	double Mean_Cold = 0; double Mean_Hot = 0;
 
-	//-------------------- Á½µã½ÃÕı Á½¸ö±¾µ×µÄ¾ùÖµ¼ÆËã -------------
+	//-------------------- ä¸¤ç‚¹çŸ«æ­£ ä¸¤ä¸ªæœ¬åº•çš„å‡å€¼è®¡ç®— -------------
 	int n = 0;
 	for (int i = 0; i < Height; i++)
 		for (int j = 0; j < Width; j++)
 		{			
-			n = j + i * Width + 1; //±íÊ¾µÚn¸ö½øÈëÇó½âµÄÊı×Ö
-			//--------¼ò»¯Æ½¾ùÔËËã------
+			n = j + i * Width + 1; //è¡¨ç¤ºç¬¬nä¸ªè¿›å…¥æ±‚è§£çš„æ•°å­—
+			//--------ç®€åŒ–å¹³å‡è¿ç®—------
 			Mean_Cold = ((n - 1)*Mean_Cold + Cold_Ram[n-1]) / n;
 			Mean_Hot = ((n - 1)*Mean_Hot + Hot_Ram[n-1]) / n;
 		}
@@ -1813,29 +2225,29 @@ void CGrabDemoDlg::OnBnClickedTpHot()
 			TP_Bias[j + i * Width] = Mean_Cold - TP_Gain[j + i * Width] * Cold_Ram[j + i * Width];
 	}
 
-	//------------------½«Á½µã½ÃÕı±í¿½±´µ½GPU£¬ÒÔ¹©µ÷ÓÃ------------------
+	//------------------å°†ä¸¤ç‚¹çŸ«æ­£è¡¨æ‹·è´åˆ°GPUï¼Œä»¥ä¾›è°ƒç”¨------------------
 	
 
-	//Èç¹ûGPU¿ÉÒÔÊ¹ÓÃ£¬½«±¾µ×Ğ´ÈëGPUÄÚ´æ
+	//å¦‚æœGPUå¯ä»¥ä½¿ç”¨ï¼Œå°†æœ¬åº•å†™å…¥GPUå†…å­˜
 	cudaStatus = cudaMemcpy(dev_pTP_Gain, TP_Gain, Width * Height * sizeof(float), cudaMemcpyHostToDevice);
 	cudaStatus = cudaMemcpy(dev_pTP_Bias, TP_Bias, Width * Height * sizeof(float), cudaMemcpyHostToDevice);
 
 
 	//-------------------------------------------------------
-	//					Ã¤Ôª½ÃÕıÊµÏÖ
-	//  ÊµÏÖ£ºĞèÒª¸ü¸ÄÊ±£¬CPU¼ÆËãÃ¤Ôª±í£¬µ¼ÈëGPU½øĞĞ¼°Ê±ÔËËã
+	//					ç›²å…ƒçŸ«æ­£å®ç°
+	//  å®ç°ï¼šéœ€è¦æ›´æ”¹æ—¶ï¼ŒCPUè®¡ç®—ç›²å…ƒè¡¨ï¼Œå¯¼å…¥GPUè¿›è¡ŒåŠæ—¶è¿ç®—
 	//-------------------------------------------------------
-	// Ã¤Ôª½ÃÕı ----- ÔÚ¸ßÎÂ±¾µ×ÖĞ£¬»Ò¶ÈÖµÎª0µÄÉèÖÃÎªÃ¤Ôª£¬RamÉèÖÃÎª0
+	// ç›²å…ƒçŸ«æ­£ ----- åœ¨é«˜æ¸©æœ¬åº•ä¸­ï¼Œç°åº¦å€¼ä¸º0çš„è®¾ç½®ä¸ºç›²å…ƒï¼ŒRamè®¾ç½®ä¸º0
 	Death_num = 0;
 	for (int i = 0; i < Height; i++)
 	{
 		for (int j = 0; j < Width; j++)
-			// Ñ¡È¡Ã¤ÔªµÄ¹æÔò£º
+			// é€‰å–ç›²å…ƒçš„è§„åˆ™ï¼š
 			if (Hot_Ram[j + i * Width] <= Cold_Ram[j + i * Width] || Hot_Ram[j + i * Width] - Cold_Ram[j + i * Width] < 0.8*(Mean_Hot - Mean_Cold) || Hot_Ram[j + i * Width] - Cold_Ram[j + i * Width] > 1.3*(Mean_Hot - Mean_Cold))
 				//if (Hot_Ram[j + i * Width] < Cold_Ram[j + i * Width] || Hot_Ram[j + i * Width] - Cold_Ram[j + i * Width] < 100)
 			{
 				pBlind_Ram[j + i * Width] = 1;
-				Death_num++;   //Í³¼ÆÃ¤Ôª¸öÊı
+				Death_num++;   //ç»Ÿè®¡ç›²å…ƒä¸ªæ•°
 			}
 			else
 			{
@@ -1843,7 +2255,7 @@ void CGrabDemoDlg::OnBnClickedTpHot()
 			}
 
 	}
-	//------------------½«Ã¤Ôª±í¿½±´µ½GPU£¬ÒÔ¹©µ÷ÓÃ------------------	
+	//------------------å°†ç›²å…ƒè¡¨æ‹·è´åˆ°GPUï¼Œä»¥ä¾›è°ƒç”¨------------------	
 	cudaStatus = cudaMemcpy(dev_pBlind_Ram, pBlind_Ram, Width * Height * sizeof(unsigned short), cudaMemcpyHostToDevice);
 	//test = pBlind_Ram[700 * 1024 + 980];
 	//test = pBlind_Ram[700 * 1024 + 981];
@@ -1853,23 +2265,23 @@ void CGrabDemoDlg::OnBnClickedTpHot()
 
 
 
-//--------------Ö±·½Í¼ÔöÇ¿°´¼ü------------------
+//--------------ç›´æ–¹å›¾å¢å¼ºæŒ‰é”®------------------
 void CGrabDemoDlg::OnBnClickedHEnhance()
 {
-/*	// TODO: ÔÚ´ËÌí¼Ó¿Ø¼şÍ¨Öª´¦Àí³ÌĞò´úÂë
+/*	// TODO: åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
 	int Histogram_On = ((CButton*)m_DlgPointer->GetDlgItem(IDC_H_Enhance))->GetCheck();
 
-	////---------·Ç¾ùÔÈ½ÃÕı²âÊÔ------
+	////---------éå‡åŒ€çŸ«æ­£æµ‹è¯•------
 	//for (int i = 0; i < 768; i++)
 	//	for (int j = 0; j < 1024; j++)
 	//		Image[j + i * 1024] = 20000 * i / 768;
 	//_______________________________________
 
-	//-------µã»÷ÔöÇ¿£¬¿ªÊ¼ÖØĞÂ½¨Á¢ÔöÇ¿±í
+	//-------ç‚¹å‡»å¢å¼ºï¼Œå¼€å§‹é‡æ–°å»ºç«‹å¢å¼ºè¡¨
 	if (Histogram_On > 0)
 	{
-		// ----------Í³¼Æ¸÷¸öÏñËØµÄÊıÁ¿------------
-		unsigned short Histogram_Count[65536] = { 0 };   //Ö±·½Í¼ÔöÇ¿±í
+		// ----------ç»Ÿè®¡å„ä¸ªåƒç´ çš„æ•°é‡------------
+		unsigned short Histogram_Count[65536] = { 0 };   //ç›´æ–¹å›¾å¢å¼ºè¡¨
 		for (int i = 0; i < 768; i++)
 			for (int j = 0; j < 1024; j++)
 			{
@@ -1881,7 +2293,7 @@ void CGrabDemoDlg::OnBnClickedHEnhance()
 		//------------
 		float sum = 0;
 
-		//-----------Éú³ÉÖ±·½Í¼±í--------------
+		//-----------ç”Ÿæˆç›´æ–¹å›¾è¡¨--------------
 		for (int i = 0; i < 65536; i++)
 		{
 			sum = sum + Histogram_Count[i];
@@ -1898,23 +2310,23 @@ void CGrabDemoDlg::OnBnClickedHEnhance()
 	*/
 }
 
-//------------------CUDAÏìÓ¦³ÌĞò£ºON---ÔòÖØĞÂÅäÖÃCUDA---------
+//------------------CUDAå“åº”ç¨‹åºï¼šON---åˆ™é‡æ–°é…ç½®CUDA---------
 void CGrabDemoDlg::OnBnClickedGpu()
 {
 
-	// ON---ÔòÖØĞÂÅäÖÃCUDA    OFF---ÊÍ·ÅÄÚ´æ£¬ÖØÖÃGPU
+	// ON---åˆ™é‡æ–°é…ç½®CUDA    OFF---é‡Šæ”¾å†…å­˜ï¼Œé‡ç½®GPU
 	int GPU_On = ((CButton*)m_DlgPointer->GetDlgItem(IDC_GPU))->GetCheck();
-	int Height = m_DlgPointer->m_Buffers->GetHeight();//»ñÈ¡µ±Ç°Í¼Ïñ´óĞ¡  768
+	int Height = m_DlgPointer->m_Buffers->GetHeight();//è·å–å½“å‰å›¾åƒå¤§å°  768
 	int Width = m_DlgPointer->m_Buffers->GetWidth();   //1024
 	cudaError_t cudaStatus;
 
-	////---------·Ç¾ùÔÈ½ÃÕı²âÊÔ------
+	////---------éå‡åŒ€çŸ«æ­£æµ‹è¯•------
 	//for (int i = 0; i < 768; i++)
 	//	for (int j = 0; j < 1024; j++)
 	//		Image[j + i * 1024] = 20000 * i / 768;
 	//_______________________________________
 
-	//-------µã»÷ÔöÇ¿£¬¿ªÊ¼ÖØĞÂ½¨Á¢ÔöÇ¿±í
+	//-------ç‚¹å‡»å¢å¼ºï¼Œå¼€å§‹é‡æ–°å»ºç«‹å¢å¼ºè¡¨
 	if (GPU_On > 0)
 	{
 		cudaStatus = cudaSetDevice(0);
@@ -1923,8 +2335,8 @@ void CGrabDemoDlg::OnBnClickedGpu()
 			goto Error;
 		}
 
-		//---------------------------Í¼ÏñÄÚ´æ¿ª±Ù---------------------------------------------------
-		// ¿ª±Ù´æ·ÅÍ¼ÏñµÄÄÚ´æ    .  
+		//---------------------------å›¾åƒå†…å­˜å¼€è¾Ÿ---------------------------------------------------
+		// å¼€è¾Ÿå­˜æ”¾å›¾åƒçš„å†…å­˜    .  
 		cudaStatus = cudaMalloc((void**)&dev_img, Height * Width * sizeof(unsigned short));
 		if (cudaStatus != cudaSuccess) {
 			fprintf(stderr, "cudaMalloc failed!");
@@ -1932,7 +2344,7 @@ void CGrabDemoDlg::OnBnClickedGpu()
 		}
 
 
-		//----------------------------Á½µã½ÃÕıÖĞ½ÃÕı±íÄÚ´æ¿ª±Ù---------------------------------------
+		//----------------------------ä¸¤ç‚¹çŸ«æ­£ä¸­çŸ«æ­£è¡¨å†…å­˜å¼€è¾Ÿ---------------------------------------
 		cudaStatus = cudaMalloc((void**)&dev_pTP_Gain, Height * Width * sizeof(float));
 		if (cudaStatus != cudaSuccess) {
 			fprintf(stderr, "dev_pTP_Gain cudaMalloc failed!");
@@ -1945,14 +2357,14 @@ void CGrabDemoDlg::OnBnClickedGpu()
 			goto Error;
 		}
 
-		//--------------------------------Ã¤Ôª½ÃÕıÊµÏÖ--------------------------------
+		//--------------------------------ç›²å…ƒçŸ«æ­£å®ç°--------------------------------
 		cudaStatus = cudaMalloc((void**)&dev_pBlind_Ram, Height * Width * sizeof(unsigned short));
 		if (cudaStatus != cudaSuccess) {
 			fprintf(stderr, "dev_pBlind_Ram cudaMalloc failed!");
 			goto Error;
 		}
 
-		//--------------------------------Ö±·½Í¼¾ùºâ±íÄÚ´æ¿ª±Ù--------------------------------
+		//--------------------------------ç›´æ–¹å›¾å‡è¡¡è¡¨å†…å­˜å¼€è¾Ÿ--------------------------------
 		cudaStatus = cudaMalloc((void**)&dev_Histogram, 65536 * sizeof(unsigned int));
 		if (cudaStatus != cudaSuccess) {
 			fprintf(stderr, "dev_Histogram cudaMalloc failed!");
@@ -1976,89 +2388,89 @@ void CGrabDemoDlg::OnBnClickedGpu()
 		return;
 	}
 
-	//Ó¦¸ÃÃ¿´Î¶¼ĞèÒªÇå¿ÕÄÚ´æ°É
+	//åº”è¯¥æ¯æ¬¡éƒ½éœ€è¦æ¸…ç©ºå†…å­˜å§
 	//cudaFree(dev_img);
 
 }
 
 
-// NETD¼ÆËã£ºĞèÒªÏÈ²É¼¯µÍÎÂ£¬¸ßÎÂ£¬°´GPU£¬Éú³ÉÃ¤Ôª±í£¬È»ºó¼ÆËãNETDÖµ
-// °´Ò»ÏÂ²É¼¯µÍÎÂÏÂµÄÊıÖµ£¬°´µÚ¶şÏÂ²É¼¯¸ßÎÂÏÂÊıÖµ
+// NETDè®¡ç®—ï¼šéœ€è¦å…ˆé‡‡é›†ä½æ¸©ï¼Œé«˜æ¸©ï¼ŒæŒ‰GPUï¼Œç”Ÿæˆç›²å…ƒè¡¨ï¼Œç„¶åè®¡ç®—NETDå€¼
+// æŒ‰ä¸€ä¸‹é‡‡é›†ä½æ¸©ä¸‹çš„æ•°å€¼ï¼ŒæŒ‰ç¬¬äºŒä¸‹é‡‡é›†é«˜æ¸©ä¸‹æ•°å€¼
 //int NETD_Vt = 0; int NETD_Vt0 = 0; int NETD_Vn = 0;
 void CGrabDemoDlg::OnBnClickedNetd()
 {
 	CString str;
-	str.Format(_T("%d"), NETD_frames);//¹Ì¶¨¸ñÊ½
+	str.Format(_T("%d"), NETD_frames);//å›ºå®šæ ¼å¼
 	GetDlgItem(IDC_Frame_Count)->SetWindowText(str);
 
-	// ÔÚ²É¼¯µÍÎÂ±¾µ×µÄÊ±ºò°´Ò»ÏÂ£¬²É¼¯50Ö¡µÍÎÂÊı¾İ¡£
-	// È»ºóÔÚ²É¼¯¸ßÎÂ±¾µ×µÄÊ±ºò°´Ò»ÏÂ£¬²É¼¯50Ö¡¸ßÎÂÊı¾İ£¬¼ÆËã³öNETDÖµ
+	// åœ¨é‡‡é›†ä½æ¸©æœ¬åº•çš„æ—¶å€™æŒ‰ä¸€ä¸‹ï¼Œé‡‡é›†50å¸§ä½æ¸©æ•°æ®ã€‚
+	// ç„¶ååœ¨é‡‡é›†é«˜æ¸©æœ¬åº•çš„æ—¶å€™æŒ‰ä¸€ä¸‹ï¼Œé‡‡é›†50å¸§é«˜æ¸©æ•°æ®ï¼Œè®¡ç®—å‡ºNETDå€¼
 	Flag_NETD++;
 	if (Flag_NETD == 1)
 		CGrabDemoDlg::OnBnClickedTpCold();
 	else
 		CGrabDemoDlg::OnBnClickedTpHot();
-	current = 0;  //³õÊ¼»¯²É¼¯µÄÖ¡Êı
+	current = 0;  //åˆå§‹åŒ–é‡‡é›†çš„å¸§æ•°
 
-	//--------±£´æÍ¼Ïñ-----------
+	//--------ä¿å­˜å›¾åƒ-----------
 	OnBnClickedSavemulti();
 }
 
-//¼ÆËã¸÷µãµÄÏìÓ¦µçÑ¹ºÍÔëÉùµçÑ¹
+//è®¡ç®—å„ç‚¹çš„å“åº”ç”µå‹å’Œå™ªå£°ç”µå‹
 
 void CGrabDemoDlg::CalculateNETD(int & flag,int Height, int Width)
 {
-	//µÚÒ»¸öÎÂ¶ÈÖµ²ÉÑù
+	//ç¬¬ä¸€ä¸ªæ¸©åº¦å€¼é‡‡æ ·
 	if (flag == 1 && current < NETD_frames)
 	{
 		for (int i = 0; i < Height; i++)
 		{
 			for (int j = 0; j < Width; j++)
 			{
-				//µÍÎÂ±¾µ×£ºÏìÓ¦µçÑ¹Æ½¾ùÖµ¼ÆËã
+				//ä½æ¸©æœ¬åº•ï¼šå“åº”ç”µå‹å¹³å‡å€¼è®¡ç®—
 				double tmp = (double(Image[j + i * Width]) - double(NETD_Vt[j + i*Width])) / (current + 1) + double(NETD_Vt[j + i*Width]);
 				NETD_Vt[j + i*Width] = tmp;
 			}
 		}
-		//-------------µÚÒ»´Î²É¼¯Íê±Ï£¬¸ø²ÉÓÃÍê³ÉÌáÊ¾--------------
+		//-------------ç¬¬ä¸€æ¬¡é‡‡é›†å®Œæ¯•ï¼Œç»™é‡‡ç”¨å®Œæˆæç¤º--------------
 		if (current == NETD_frames - 1)
 			GetDlgItem(IDC_NETDshow)->SetWindowText(_T("Ready"));
 	}
-	// µÚ¶ş¸öÎÂ¶ÈÖµ²ÉÑù
+	// ç¬¬äºŒä¸ªæ¸©åº¦å€¼é‡‡æ ·
 	else if (flag == 2 && current < NETD_frames)
 	{
 		for (int i = 0; i < Height; i++)
 		{
 			for (int j = 0; j < Width; j++)
 			{
-				//¸ßÎÂ±¾µ×£ºÏìÓ¦µçÑ¹Æ½¾ùÖµ¼ÆËã
+				//é«˜æ¸©æœ¬åº•ï¼šå“åº”ç”µå‹å¹³å‡å€¼è®¡ç®—
 				double tmp = (double(Image[j + i * Width]) - double(NETD_Vt0[j + i*Width])) / (current + 1) + double(NETD_Vt0[j + i*Width]);
 				NETD_Vt0[j + i*Width] = tmp;
-				//´æ´¢50Ö¡¸ßÎÂµçÑ¹Êı¾İ£¬ÓÃÓÚ¼ÆËãÔëÉùµçÑ¹
+				//å­˜å‚¨50å¸§é«˜æ¸©ç”µå‹æ•°æ®ï¼Œç”¨äºè®¡ç®—å™ªå£°ç”µå‹
 				NETD_Vn[j + i*Width][current] = Image[j + i * Width];
-				//¼ÆËã50Ö¡ÔëÉùµçÑ¹Æ½¾ùÖµ
+				//è®¡ç®—50å¸§å™ªå£°ç”µå‹å¹³å‡å€¼
 				//NETD_VnA[j + i*Width] = (Image[j + i * Width] - NETD_VnA[j + i*Width]) / (current + 1) + NETD_VnA[j + i*Width];
 			}
 
 		}
-		//²É¼¯Íê±Ïºó¼ÆËãNETDÖµ
+		//é‡‡é›†å®Œæ¯•åè®¡ç®—NETDå€¼
 		if (current == NETD_frames - 1)
 		{
-			// ¼ÆËã¸÷ÏñÔªµÄÔëÉùµçÑ¹
+			// è®¡ç®—å„åƒå…ƒçš„å™ªå£°ç”µå‹
 			for (int i = 0; i < Height; i++)
 			{
 				for (int j = 0; j < Width; j++)
 				{
-					//¼ÆËãÔëÉùÆ½¾ùÖµ
+					//è®¡ç®—å™ªå£°å¹³å‡å€¼
 					double sum = 0;
 					for (int k = 0; k < NETD_frames; k++)
 					{
-						sum = sum + pow(double(NETD_Vn[j + i*Width][k]) - double(NETD_Vt0[j + i*Width]), 2);  //¼ÆËã·½²î£ºµÃµ½ÔëÉùµçÑ¹
+						sum = sum + pow(double(NETD_Vn[j + i*Width][k]) - double(NETD_Vt0[j + i*Width]), 2);  //è®¡ç®—æ–¹å·®ï¼šå¾—åˆ°å™ªå£°ç”µå‹
 					}
-					NETD_VnA[j + i*Width] = (1 / double(NETD_K)) * sqrt((sum / (NETD_frames - 1)));  //¼ÆËã¸÷ÏñËØµãÔëÉùµçÑ¹
+					NETD_VnA[j + i*Width] = (1 / double(NETD_K)) * sqrt((sum / (NETD_frames - 1)));  //è®¡ç®—å„åƒç´ ç‚¹å™ªå£°ç”µå‹
 				}
 			}
-			//ÎªÅÅ³ı¹ıÈÈÏñÔª£¬¼ÆËãÔëÉùµçÑ¹¾ùÖµ£¬>2±¶Æ½¾ùÔëÉùµçÑ¹µÄÎª¹ıÈÈÏñÔª£¬½«Ã¤Ôª±íÖµÉèÎª2£¬CPUÖĞÖ»½øĞĞÃ¤ÔªµÄÌæ»»£¬ÅĞ¶ÏÌõ¼ş==1
+			//ä¸ºæ’é™¤è¿‡çƒ­åƒå…ƒï¼Œè®¡ç®—å™ªå£°ç”µå‹å‡å€¼ï¼Œ>2å€å¹³å‡å™ªå£°ç”µå‹çš„ä¸ºè¿‡çƒ­åƒå…ƒï¼Œå°†ç›²å…ƒè¡¨å€¼è®¾ä¸º2ï¼ŒCPUä¸­åªè¿›è¡Œç›²å…ƒçš„æ›¿æ¢ï¼Œåˆ¤æ–­æ¡ä»¶==1
 			double Average_Noise = 0;
 			for (int i = 0; i < Height; i++)
 			{
@@ -2072,7 +2484,7 @@ void CGrabDemoDlg::CalculateNETD(int & flag,int Height, int Width)
 			{
 				for (int j = 0; j < Width; j++)
 				{
-					//¼ÆËã¹ıÈÈÏñÔª
+					//è®¡ç®—è¿‡çƒ­åƒå…ƒ
 					if (NETD_VnA[j + i*Width] > 2 * Average_Noise && pBlind_Ram[j + i*Width] == 0)
 					{
 						pBlind_Ram[j + i*Width] = 2;
@@ -2082,20 +2494,20 @@ void CGrabDemoDlg::CalculateNETD(int & flag,int Height, int Width)
 				}
 			}
 
-			//¼ÆËãµ¥¸öÏñÔªµÄNETD
+			//è®¡ç®—å•ä¸ªåƒå…ƒçš„NETD
 			for (int i = 0; i < Height; i++)
 			{
 				for (int j = 0; j < Width; j++)
 				{
 					if (pBlind_Ram[j + i*Width] == 0)
 					{
-						NETD_Vt[j + i*Width] = (1 / double(NETD_K)) * double(NETD_Vt0[j + i*Width] - NETD_Vt[j + i*Width]);  //¸÷ÏñËØÏìÓ¦µçÑ¹
-						NETD_Vt0[j + i*Width] = double(T - T0) / double(NETD_Vt[j + i*Width]) * double(NETD_VnA[j + i*Width]);  // ¸÷µãNETD ¼ÆËãÍê±Ï
+						NETD_Vt[j + i*Width] = (1 / double(NETD_K)) * double(NETD_Vt0[j + i*Width] - NETD_Vt[j + i*Width]);  //å„åƒç´ å“åº”ç”µå‹
+						NETD_Vt0[j + i*Width] = double(T - T0) / double(NETD_Vt[j + i*Width]) * double(NETD_VnA[j + i*Width]);  // å„ç‚¹NETD è®¡ç®—å®Œæ¯•
 					}
 
 				}
 			}
-			//----------NETD¼ÆËãÍê³É£¬ÇóÆ½¾ù£¬Êä³öµ½¿Ø¼ş---------
+			//----------NETDè®¡ç®—å®Œæˆï¼Œæ±‚å¹³å‡ï¼Œè¾“å‡ºåˆ°æ§ä»¶---------
 			int count = 0;	double Aver = 0;
 			for (int i = 0; i < Height; i++)
 			{
@@ -2103,7 +2515,7 @@ void CGrabDemoDlg::CalculateNETD(int & flag,int Height, int Width)
 				{
 					if (pBlind_Ram[j + i*Width] == 0)
 					{
-						Aver = (double(NETD_Vt0[j + i*Width]) - Aver) / (count + 1) + Aver;  //¼ÆËãÆ½¾ùNETD
+						Aver = (double(NETD_Vt0[j + i*Width]) - Aver) / (count + 1) + Aver;  //è®¡ç®—å¹³å‡NETD
 						count++;
 					}
 				}
@@ -2111,8 +2523,8 @@ void CGrabDemoDlg::CalculateNETD(int & flag,int Height, int Width)
 			//NETDshow->SetWindowText(str);
 			//((CButton*)m_DlgPointer->GetDlgItem(IDC_NETDshow));
 			char   str[20];
-			sprintf(str, "%.4f", 1000*Aver);//×ª»»³É×Ö·û´®   
-			// double   x=   atof(jidian)   ;//×ª»»³É¸¡µãÊı
+			sprintf(str, "%.4f", 1000*Aver);//è½¬æ¢æˆå­—ç¬¦ä¸²   
+			// double   x=   atof(jidian)   ;//è½¬æ¢æˆæµ®ç‚¹æ•°
 			int num = MultiByteToWideChar(0, 0, str, -1, NULL, 0);
 			wchar_t *wide = new wchar_t[num];
 			MultiByteToWideChar(0, 0, str, -1, wide, num);
@@ -2126,35 +2538,35 @@ void CGrabDemoDlg::CalculateNETD(int & flag,int Height, int Width)
 		return;
 	}
 
-	current++;//±íÊ¾Ö¡ÊıÔö¼Ó
+	current++;//è¡¨ç¤ºå¸§æ•°å¢åŠ 
 }
 
 void CGrabDemoDlg::OnBnClickedOk()
 {
-	// --------------------µ÷ÓÃI2C·şÎñ-------------------
+	// --------------------è°ƒç”¨I2CæœåŠ¡-------------------
 	IMyCalc *pMyCalc = NULL;
 	IUnknown *pUnknown = NULL;
-	// 1.³õÊ¼»¯COM¿â
+	// 1.åˆå§‹åŒ–COMåº“
 	HRESULT hr = CoInitialize(NULL);
-	// 2.¸ù¾İÒÑÖªProgIDÕÒ¶ÔÓ¦CLSID
+	// 2.æ ¹æ®å·²çŸ¥ProgIDæ‰¾å¯¹åº”CLSID
 	CLSID CalcID;
-	hr = ::CLSIDFromProgID(L"MyCalc.math", &CalcID);   // ´Ë´¦ÊÇ¿ªÊ¼ÉèÖÃµÄID
+	hr = ::CLSIDFromProgID(L"MyCalc.math", &CalcID);   // æ­¤å¤„æ˜¯å¼€å§‹è®¾ç½®çš„ID
 	if (S_OK != hr)
-		AfxMessageBox(_T("²éÕÒCalcIDÊ§°Ü"));
-	// 3.´´½¨¶ÔÓ¦µÄ½Ó¿ÚÊµÀı
+		AfxMessageBox(_T("æŸ¥æ‰¾CalcIDå¤±è´¥"));
+	// 3.åˆ›å»ºå¯¹åº”çš„æ¥å£å®ä¾‹
 	hr = CoCreateInstance(CalcID, NULL, CLSCTX_LOCAL_SERVER, IID_IUnknown, (void **)&pUnknown);
 	if (S_OK != hr)
-		AfxMessageBox(_T("´´½¨ÊµÀıÊ§°Ü"));
-	// 4.²éÑ¯½Ó¿Ú
+		AfxMessageBox(_T("åˆ›å»ºå®ä¾‹å¤±è´¥"));
+	// 4.æŸ¥è¯¢æ¥å£
 	hr = pUnknown->QueryInterface(IID_IMyCalc, (void **)&pMyCalc);
 	if (S_OK != hr)
-		AfxMessageBox(_T("´´½¨IMyCalcÊ§°Ü"));
-	// 5.µ÷ÓÃÄÚ²¿½Ó¿Ú
+		AfxMessageBox(_T("åˆ›å»ºIMyCalcå¤±è´¥"));
+	// 5.è°ƒç”¨å†…éƒ¨æ¥å£
 
 
-	// TODO: ÔÚ´ËÌí¼Ó¿Ø¼şÍ¨Öª´¦Àí³ÌĞò´úÂë
+	// TODO: åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
 	CString tmpString;
-	char n_in = 2; char n_out = 3;  //ÊäÈë¶àÉÙ¶ÁÈ¡¶àÉÙ£¿
+	char n_in = 2; char n_out = 3;  //è¾“å…¥å¤šå°‘è¯»å–å¤šå°‘ï¼Ÿ
 
 	GetDlgItemText(I2C_nW, tmpString);
 	n_in = _ttoi(tmpString);
@@ -2164,9 +2576,9 @@ void CGrabDemoDlg::OnBnClickedOk()
 
 	char InData[4];
 	char OutData[3];
-	// µÚÒ»×Ö¶ÎÄ¬ÈÏÒÑ¾­ÊäÈëÁË 0xA0£¬Ö±½Ó´ÓµÚ¶ş×Ö¶Î¿ªÊ¼Ğ´
+	// ç¬¬ä¸€å­—æ®µé»˜è®¤å·²ç»è¾“å…¥äº† 0xA0ï¼Œç›´æ¥ä»ç¬¬äºŒå­—æ®µå¼€å§‹å†™
 	//InData[-1] = 0xA0;
-	//-----------------¶ÁÈ¡ÊäÈëÊı¾İ--------------------
+	//-----------------è¯»å–è¾“å…¥æ•°æ®--------------------
 	GetDlgItemText(I2C_i0, tmpString);
 	int num = wcstoll(tmpString, 0, 16);
 	InData[0] = char(num);
@@ -2184,10 +2596,10 @@ void CGrabDemoDlg::OnBnClickedOk()
 	num = wcstoll(tmpString, 0, 16);
 	InData[3] = char(num);
 	
-	//-------------------µ÷ÓÃI2C 32Î»³ÌĞò½Ó¿Ú------------------------
+	//-------------------è°ƒç”¨I2C 32ä½ç¨‹åºæ¥å£------------------------
 	pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
 
-	//--------------------Êä³öµ½´°¿Ú----------------
+	//--------------------è¾“å‡ºåˆ°çª—å£----------------
 	if (n_out > 0)
 	{
 		num = OutData[0];
@@ -2213,44 +2625,44 @@ void CGrabDemoDlg::OnBnClickedOk()
 	else
 		SetDlgItemText(I2C_o2, L" ");
 
-	//ÇåÀí×ÊÔ´¼°·´³õÊ¼»¯COM×é¼ş
+	//æ¸…ç†èµ„æºåŠååˆå§‹åŒ–COMç»„ä»¶
 	pMyCalc->Release();
 	pUnknown->Release();
 	CoUninitialize();
 
 }
 
-// ------------   ÂëÂÊ¼ÆËã ----------------
+// ------------   ç ç‡è®¡ç®— ----------------
 void CGrabDemoDlg::OnBnClickedBitrate()
 {
-	// --------------------µ÷ÓÃI2C·şÎñ-------------------
+	// --------------------è°ƒç”¨I2CæœåŠ¡-------------------
 	IMyCalc *pMyCalc = NULL;
 	IUnknown *pUnknown = NULL;
-	// 1.³õÊ¼»¯COM¿â
+	// 1.åˆå§‹åŒ–COMåº“
 	HRESULT hr = CoInitialize(NULL);
-	// 2.¸ù¾İÒÑÖªProgIDÕÒ¶ÔÓ¦CLSID
+	// 2.æ ¹æ®å·²çŸ¥ProgIDæ‰¾å¯¹åº”CLSID
 	CLSID CalcID;
-	hr = ::CLSIDFromProgID(L"MyCalc.math", &CalcID);   // ´Ë´¦ÊÇ¿ªÊ¼ÉèÖÃµÄID
+	hr = ::CLSIDFromProgID(L"MyCalc.math", &CalcID);   // æ­¤å¤„æ˜¯å¼€å§‹è®¾ç½®çš„ID
 	if (S_OK != hr)
-		AfxMessageBox(_T("²éÕÒCalcIDÊ§°Ü"));
-	// 3.´´½¨¶ÔÓ¦µÄ½Ó¿ÚÊµÀı
+		AfxMessageBox(_T("æŸ¥æ‰¾CalcIDå¤±è´¥"));
+	// 3.åˆ›å»ºå¯¹åº”çš„æ¥å£å®ä¾‹
 	hr = CoCreateInstance(CalcID, NULL, CLSCTX_LOCAL_SERVER, IID_IUnknown, (void **)&pUnknown);
 	if (S_OK != hr)
-		AfxMessageBox(_T("´´½¨ÊµÀıÊ§°Ü"));
-	// 4.²éÑ¯½Ó¿Ú
+		AfxMessageBox(_T("åˆ›å»ºå®ä¾‹å¤±è´¥"));
+	// 4.æŸ¥è¯¢æ¥å£
 	hr = pUnknown->QueryInterface(IID_IMyCalc, (void **)&pMyCalc);
 	if (S_OK != hr)
-		AfxMessageBox(_T("´´½¨IMyCalcÊ§°Ü"));
-	// 5.µ÷ÓÃÄÚ²¿½Ó¿Ú
+		AfxMessageBox(_T("åˆ›å»ºIMyCalcå¤±è´¥"));
+	// 5.è°ƒç”¨å†…éƒ¨æ¥å£
 
-	//--------------------------ÂëÂÊ¼ÆËã---------------------------
-	//  ÂëÂÊ£ºRu = Rs * b * CRv * CRrs * (Tu/Ts)
+	//--------------------------ç ç‡è®¡ç®—---------------------------
+	//  ç ç‡ï¼šRu = Rs * b * CRv * CRrs * (Tu/Ts)
 	double Rs = double(6048) / 896; double B = 2; double CRv = double(1 / 2); double CRrs = double(188) / 204; double TuTs = double(4) / 5;
 	char InData[4];
 	char OutData[3];
-	char n_in = 2; char n_out = 3;  //ÊäÈë¶àÉÙ¶ÁÈ¡¶àÉÙ£¿
+	char n_in = 2; char n_out = 3;  //è¾“å…¥å¤šå°‘è¯»å–å¤šå°‘ï¼Ÿ
 
-	//-----¶ÁÈ¡ Rs ------ ¶ÁÈ¡Êı¾İ 0 : 2K---->1512/224uS  _________  1 : 8K  ----> 6048/896uS
+	//-----è¯»å– Rs ------ è¯»å–æ•°æ® 0 : 2K---->1512/224uS  _________  1 : 8K  ----> 6048/896uS
 	InData[0] = 0x1D;
 	n_in = 2; n_out = 1;
 	pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
@@ -2261,7 +2673,7 @@ void CGrabDemoDlg::OnBnClickedBitrate()
 	else 
 		MessageBox(_T("I2C Read Data Error !"));
 
-	//-----¶ÁÈ¡ b ------
+	//-----è¯»å– b ------
 	InData[0] = 0x1E;
 	n_in = 2; n_out = 1;
 	pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
@@ -2274,7 +2686,7 @@ void CGrabDemoDlg::OnBnClickedBitrate()
 	else
 		MessageBox(_T("I2C Read Data Error !"));
 
-	//-----¶ÁÈ¡ CRv ------
+	//-----è¯»å– CRv ------
 	InData[0] = 0x1F;
 	n_in = 2; n_out = 1;
 	pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
@@ -2291,7 +2703,7 @@ void CGrabDemoDlg::OnBnClickedBitrate()
 	else
 		MessageBox(_T("I2C Read Data Error !"));
 
-	//-----¶ÁÈ¡ Ts ------
+	//-----è¯»å– Ts ------
 	InData[0] = 0x20;
 	n_in = 2; n_out = 1;
 	pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
@@ -2311,54 +2723,54 @@ void CGrabDemoDlg::OnBnClickedBitrate()
 	tmpString.Format(_T("%f"), Ru);
 	SetDlgItemText(I2C_Rates, tmpString);
 
-	//ÇåÀí×ÊÔ´¼°·´³õÊ¼»¯COM×é¼ş
+	//æ¸…ç†èµ„æºåŠååˆå§‹åŒ–COMç»„ä»¶
 	pMyCalc->Release();
 	pUnknown->Release();
 	CoUninitialize();
 }
 
-//------------------------ÓëÏÂÎ»»úÍ¨ĞÅÄ£¿é-----------------------
+//------------------------ä¸ä¸‹ä½æœºé€šä¿¡æ¨¡å—-----------------------
 void CGrabDemoDlg::OnBnClickedOpen()
 {
-	// »ñÈ¡´®¿ÚÑ¡ÔñÏÂÀ­ÌõÑ¡Ïî
+	// è·å–ä¸²å£é€‰æ‹©ä¸‹æ‹‰æ¡é€‰é¡¹
 	int nIndex = m_Combo.GetCurSel();
 	CString strCom; CString strRate;
 	m_Combo.GetLBText(nIndex, strCom);
 
-	// »ñÈ¡´®¿Ú´«ÊäËÙ¶ÈÑ¡ÔñÏÂÀ­ÌõÑ¡Ïî
+	// è·å–ä¸²å£ä¼ è¾“é€Ÿåº¦é€‰æ‹©ä¸‹æ‹‰æ¡é€‰é¡¹
 	nIndex = Comb_Rate.GetCurSel();
 	Comb_Rate.GetLBText(nIndex, strRate);
 	int Rate = _ttoi(strRate);
 
-	//strtmp.Format(_T("COM:%d\n"), com_data);// ÏûÏ¢ÏÔÊ¾Êı×Ö
+	//strtmp.Format(_T("COM:%d\n"), com_data);// æ¶ˆæ¯æ˜¾ç¤ºæ•°å­—
 	//MessageBox(strtmp);
 	m_ComPortFlag = st.ThreadInit(strCom,Rate);
 	if (m_ComPortFlag == true)
 	{
-		::MessageBox(NULL, _T("´®¿Ú´ò¿ª³É¹¦"), _T("ÌáÊ¾"), MB_OK);
+		::MessageBox(NULL, _T("ä¸²å£æ‰“å¼€æˆåŠŸ"), _T("æç¤º"), MB_OK);
 	}
 	else
 	{
-		::MessageBox(NULL, _T("´®¿Ú´ò¿ªÊ§°Ü"), _T("ÌáÊ¾"), MB_OK);
+		::MessageBox(NULL, _T("ä¸²å£æ‰“å¼€å¤±è´¥"), _T("æç¤º"), MB_OK);
 	}
 
-	st.Com.SetWnd(this->GetSafeHwnd());   //´®¿ÚÏûÏ¢´«µ½µ±Ç°´°¿Ú
+	st.Com.SetWnd(this->GetSafeHwnd());   //ä¸²å£æ¶ˆæ¯ä¼ åˆ°å½“å‰çª—å£
 }
 
-// ÏÂÎ»»ú´®¿Ú½ÓÊÕµ½Êı¾İµÄÖĞ¶Ïº¯Êı
+// ä¸‹ä½æœºä¸²å£æ¥æ”¶åˆ°æ•°æ®çš„ä¸­æ–­å‡½æ•°
 LRESULT CGrabDemoDlg::SerialRead(WPARAM, LPARAM)
 {
 
-	//AfxMessageBox(_T("Êı¾İÀ´À²"));
-	SetTimer(1, Serial_Delay_Time, NULL);  //  µ¥Î»£ºms
+	//AfxMessageBox(_T("æ•°æ®æ¥å•¦"));
+	SetTimer(1, Serial_Delay_Time, NULL);  //  å•ä½ï¼šms
 	int result = st.OnReceive();
 
 	if (result == 0)
 		FPGA_Receive();
 	else
 	{
-		CString temp_value = _T("");   //temp_valueÓÃÀ´´¦ÀíintÖµ
-		temp_value.Format(_T("Êı¾İ´íÎó£¬´úÂë£º%d"), result);//¹Ì¶¨¸ñÊ½
+		CString temp_value = _T("");   //temp_valueç”¨æ¥å¤„ç†intå€¼
+		temp_value.Format(_T("æ•°æ®é”™è¯¯ï¼Œä»£ç ï¼š%d"), result);//å›ºå®šæ ¼å¼
 		AfxMessageBox(temp_value);
 	}
 	//st.OnReceive(readData);
@@ -2371,9 +2783,9 @@ LRESULT CGrabDemoDlg::SerialRead(WPARAM, LPARAM)
 
 void CGrabDemoDlg::OnBnClickedClose()
 {
-	// TODO: ÔÚ´ËÌí¼Ó¿Ø¼şÍ¨Öª´¦Àí³ÌĞò´úÂë
+	// TODO: åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
 	st.CloseSerialPort();
-	//::MessageBox(NULL, _T("´®¿ÚÒÑ¹Ø±Õ"), _T("ÌáÊ¾"), MB_OK);
+	//::MessageBox(NULL, _T("ä¸²å£å·²å…³é—­"), _T("æç¤º"), MB_OK);
 	m_ComPortFlag = false;
 }
 
@@ -2383,149 +2795,149 @@ void CGrabDemoDlg::OnBnClickedHe()
 	FPGA_Send();
 	if (m_ComPortFlag == true)
 	{
-		// ¼ÆÊ±Æ÷1±íÊ¾ÓëÏÂÎ»»úÍ¨ĞÅ
-		SetTimer(1, Serial_Delay_Time, NULL);  //  µ¥Î»£ºms
+		// è®¡æ—¶å™¨1è¡¨ç¤ºä¸ä¸‹ä½æœºé€šä¿¡
+		SetTimer(1, Serial_Delay_Time, NULL);  //  å•ä½ï¼šms
 		bool status = 0;
 		CString HE;
-		GetDlgItemText(FPGA_HE, HE); //È¡°´Å¥±êÌâ
-		if (HE == _T("ÔöÇ¿_´ò¿ª"))
+		GetDlgItemText(FPGA_HE, HE); //å–æŒ‰é’®æ ‡é¢˜
+		if (HE == _T("å¢å¼º_æ‰“å¼€"))
 		{
 			status = st.SendCommand(COMMAND_PE_MODULE_CONTROL, 0xff);
 			if (status)
-				GetDlgItem(FPGA_HE)->SetWindowText(_T("ÔöÇ¿_¹Ø±Õ"));
+				GetDlgItem(FPGA_HE)->SetWindowText(_T("å¢å¼º_å…³é—­"));
 			return;
 		}
 		else
 		{
 			status = st.SendCommand(COMMAND_PE_MODULE_CONTROL, 0xf0);
 			if (status)
-				GetDlgItem(FPGA_HE)->SetWindowText(_T("ÔöÇ¿_´ò¿ª"));
+				GetDlgItem(FPGA_HE)->SetWindowText(_T("å¢å¼º_æ‰“å¼€"));
 			return;
 		}
 	}
-	::MessageBox(NULL, _T("´®¿ÚÎ´´ò¿ª£¬ÎŞ·¨·¢ËÍ"), _T("ÌáÊ¾"), MB_OK);
+	::MessageBox(NULL, _T("ä¸²å£æœªæ‰“å¼€ï¼Œæ— æ³•å‘é€"), _T("æç¤º"), MB_OK);
 }
 
-//ÏÂÎ»»ú ²É¼¯µÍÎÂ±¾µ×
+//ä¸‹ä½æœº é‡‡é›†ä½æ¸©æœ¬åº•
 void CGrabDemoDlg::OnBnClickedGetlow()
 {
 	FPGA_Send();
-	SetTimer(1, Serial_Delay_Time, NULL);  //  µ¥Î»£ºms
+	SetTimer(1, Serial_Delay_Time, NULL);  //  å•ä½ï¼šms
 	if (m_ComPortFlag == true)
 	{
 		bool status = st.SendCommand(COMMAND_NUC_CONTROL, 0x00);
 		if (!status)		
-			::MessageBox(NULL, _T("·¢ËÍÃüÁîÊ§°Ü"), _T("ÌáÊ¾"), MB_OK);
+			::MessageBox(NULL, _T("å‘é€å‘½ä»¤å¤±è´¥"), _T("æç¤º"), MB_OK);
 		return;
 	}
-	::MessageBox(NULL, _T("´®¿ÚÎ´´ò¿ª£¬ÎŞ·¨·¢ËÍ"), _T("ÌáÊ¾"), MB_OK);
+	::MessageBox(NULL, _T("ä¸²å£æœªæ‰“å¼€ï¼Œæ— æ³•å‘é€"), _T("æç¤º"), MB_OK);
 }
 void CGrabDemoDlg::OnBnClickedGethigh()
 {
 	FPGA_Send();
-	SetTimer(1, Serial_Delay_Time, NULL);  //  µ¥Î»£ºms
+	SetTimer(1, Serial_Delay_Time, NULL);  //  å•ä½ï¼šms
 	if (m_ComPortFlag == true)
 	{
 		bool status = st.SendCommand(COMMAND_NUC_CONTROL, 0x01);
 		if (!status)
-			::MessageBox(NULL, _T("·¢ËÍÃüÁîÊ§°Ü"), _T("ÌáÊ¾"), MB_OK);
+			::MessageBox(NULL, _T("å‘é€å‘½ä»¤å¤±è´¥"), _T("æç¤º"), MB_OK);
 		return;
 	}
-	::MessageBox(NULL, _T("´®¿ÚÎ´´ò¿ª£¬ÎŞ·¨·¢ËÍ"), _T("ÌáÊ¾"), MB_OK);
+	::MessageBox(NULL, _T("ä¸²å£æœªæ‰“å¼€ï¼Œæ— æ³•å‘é€"), _T("æç¤º"), MB_OK);
 }
 
 void CGrabDemoDlg::OnBnClickedBlindCorrection()
 {
 	FPGA_Send();
-	// ¼ÆÊ±Æ÷1±íÊ¾ÓëÏÂÎ»»úÍ¨ĞÅ
-	SetTimer(1, Serial_Delay_Time, NULL);  //  µ¥Î»£ºms
+	// è®¡æ—¶å™¨1è¡¨ç¤ºä¸ä¸‹ä½æœºé€šä¿¡
+	SetTimer(1, Serial_Delay_Time, NULL);  //  å•ä½ï¼šms
 	if (m_ComPortFlag == true)
 	{
 		bool status = 0;
 		CString HE;
-		GetDlgItemText(FPGA_Blind_Correction, HE); //È¡°´Å¥±êÌâ
-		if (HE == _T("Ã¤Ôª½ÃÕı_´ò¿ª"))
+		GetDlgItemText(FPGA_Blind_Correction, HE); //å–æŒ‰é’®æ ‡é¢˜
+		if (HE == _T("ç›²å…ƒçŸ«æ­£_æ‰“å¼€"))
 		{
 			status = st.SendCommand(COMMAND_DY_BADPOINT_MODULE_CONTROL, 0xff);
 			if (status)
-				GetDlgItem(FPGA_Blind_Correction)->SetWindowText(_T("Ã¤Ôª½ÃÕı_¹Ø±Õ"));
+				GetDlgItem(FPGA_Blind_Correction)->SetWindowText(_T("ç›²å…ƒçŸ«æ­£_å…³é—­"));
 			return;
 		}
 		else
 		{
 			status = st.SendCommand(COMMAND_DY_BADPOINT_MODULE_CONTROL, 0xf0);
 			if (status)
-				GetDlgItem(FPGA_Blind_Correction)->SetWindowText(_T("Ã¤Ôª½ÃÕı_´ò¿ª"));
+				GetDlgItem(FPGA_Blind_Correction)->SetWindowText(_T("ç›²å…ƒçŸ«æ­£_æ‰“å¼€"));
 			return;
 		}
 	}
-	::MessageBox(NULL, _T("´®¿ÚÎ´´ò¿ª£¬ÎŞ·¨·¢ËÍ"), _T("ÌáÊ¾"), MB_OK);
+	::MessageBox(NULL, _T("ä¸²å£æœªæ‰“å¼€ï¼Œæ— æ³•å‘é€"), _T("æç¤º"), MB_OK);
 }
-//ÏÂÎ»»ú Á½µã½ÃÕı
+//ä¸‹ä½æœº ä¸¤ç‚¹çŸ«æ­£
 void CGrabDemoDlg::OnBnClickedTpCorrection()
 {
 	FPGA_Send();
-	// ¼ÆÊ±Æ÷1±íÊ¾ÓëÏÂÎ»»úÍ¨ĞÅ
-	SetTimer(1, Serial_Delay_Time, NULL);  //  µ¥Î»£ºms
+	// è®¡æ—¶å™¨1è¡¨ç¤ºä¸ä¸‹ä½æœºé€šä¿¡
+	SetTimer(1, Serial_Delay_Time, NULL);  //  å•ä½ï¼šms
 	if (m_ComPortFlag == true)
 	{
 		bool status = 0;
 		CString HE;
-		GetDlgItemText(FPGA_TP_Correction, HE); //È¡°´Å¥±êÌâ
-		if (HE == _T("Á½µã½ÃÕı_´ò¿ª"))
+		GetDlgItemText(FPGA_TP_Correction, HE); //å–æŒ‰é’®æ ‡é¢˜
+		if (HE == _T("ä¸¤ç‚¹çŸ«æ­£_æ‰“å¼€"))
 		{
 			status = st.SendCommand(COMMAND_TWOPOINT_MODULE_CONTROL, 0xff);
 			if (status)
-				GetDlgItem(FPGA_TP_Correction)->SetWindowText(_T("Á½µã½ÃÕı_¹Ø±Õ"));
+				GetDlgItem(FPGA_TP_Correction)->SetWindowText(_T("ä¸¤ç‚¹çŸ«æ­£_å…³é—­"));
 			return;
 		}
 		else
 		{
 			status = st.SendCommand(COMMAND_TWOPOINT_MODULE_CONTROL, 0xf0);
 			if (status)
-				GetDlgItem(FPGA_TP_Correction)->SetWindowText(_T("Á½µã½ÃÕı_´ò¿ª"));
+				GetDlgItem(FPGA_TP_Correction)->SetWindowText(_T("ä¸¤ç‚¹çŸ«æ­£_æ‰“å¼€"));
 			return;
 		}
 	}
-	::MessageBox(NULL, _T("´®¿ÚÎ´´ò¿ª£¬ÎŞ·¨·¢ËÍ"), _T("ÌáÊ¾"), MB_OK);
+	::MessageBox(NULL, _T("ä¸²å£æœªæ‰“å¼€ï¼Œæ— æ³•å‘é€"), _T("æç¤º"), MB_OK);
 }
 
 
 void CGrabDemoDlg::OnBnClickedMedianFilter()
 {
 	FPGA_Send();
-	// ¼ÆÊ±Æ÷1±íÊ¾ÓëÏÂÎ»»úÍ¨ĞÅ
-	SetTimer(1, Serial_Delay_Time, NULL);  //  µ¥Î»£ºms
+	// è®¡æ—¶å™¨1è¡¨ç¤ºä¸ä¸‹ä½æœºé€šä¿¡
+	SetTimer(1, Serial_Delay_Time, NULL);  //  å•ä½ï¼šms
 	if (m_ComPortFlag == true)
 	{
 		bool status = 0;
 		CString HE;
-		GetDlgItemText(FPGA_Median_Filter, HE); //È¡°´Å¥±êÌâ
-		if (HE == _T("ÖĞÖµÂË²¨_´ò¿ª"))
+		GetDlgItemText(FPGA_Median_Filter, HE); //å–æŒ‰é’®æ ‡é¢˜
+		if (HE == _T("ä¸­å€¼æ»¤æ³¢_æ‰“å¼€"))
 		{
 			status = st.SendCommand(COMMAND_MID_MODULE_CONTROL, 0xff);
 			if (status)
-				GetDlgItem(FPGA_Median_Filter)->SetWindowText(_T("ÖĞÖµÂË²¨_¹Ø±Õ"));
+				GetDlgItem(FPGA_Median_Filter)->SetWindowText(_T("ä¸­å€¼æ»¤æ³¢_å…³é—­"));
 			return;
 		}
 		else
 		{
 			status = st.SendCommand(COMMAND_MID_MODULE_CONTROL, 0xf0);
 			if (status)
-				GetDlgItem(FPGA_Median_Filter)->SetWindowText(_T("ÖĞÖµÂË²¨_´ò¿ª"));
+				GetDlgItem(FPGA_Median_Filter)->SetWindowText(_T("ä¸­å€¼æ»¤æ³¢_æ‰“å¼€"));
 			return;
 		}
 	}
-	::MessageBox(NULL, _T("´®¿ÚÎ´´ò¿ª£¬ÎŞ·¨·¢ËÍ"), _T("ÌáÊ¾"), MB_OK);
+	::MessageBox(NULL, _T("ä¸²å£æœªæ‰“å¼€ï¼Œæ— æ³•å‘é€"), _T("æç¤º"), MB_OK);
 
 }
 
 
 void CGrabDemoDlg::OnBnClickedtest()
 {
-	// NETD²âÊÔ£¬¿ØÖÆÊäÈëµÄÍ¼Ïñ
+	// NETDæµ‹è¯•ï¼Œæ§åˆ¶è¾“å…¥çš„å›¾åƒ
 
-	//¼ÆËã¾ùÖµ
+	//è®¡ç®—å‡å€¼
 
 	Flag_NETD = 1;
 	for (int i = 0; i < 768; i++)
@@ -2535,13 +2947,13 @@ void CGrabDemoDlg::OnBnClickedtest()
 
 	
 
-	//¸ßÎÂÍ¼Ïñ²É¼¯
-	//¼ÆËã¾ùÖµ
+	//é«˜æ¸©å›¾åƒé‡‡é›†
+	//è®¡ç®—å‡å€¼
 	current = 0;
 	Flag_NETD = 2;
 	for (int k = 0; k < 50; k++)
 	{
-		//µÍÎÂÍ¼Ïñ²É¼¯
+		//ä½æ¸©å›¾åƒé‡‡é›†
 		if (k<16)
 			for (int i = 0; i < 768; i++)
 				for (int j = 0; j < 1024; j++)
@@ -2563,8 +2975,8 @@ void CGrabDemoDlg::OnBnClickedtest()
 
 void CGrabDemoDlg::OnBnClickedTest()
 {
-	// ¼ÆÊ±Æ÷1±íÊ¾ÓëÏÂÎ»»úÍ¨ĞÅ
-	SetTimer(1, Serial_Delay_Time, NULL);  //  µ¥Î»£ºms
+	// è®¡æ—¶å™¨1è¡¨ç¤ºä¸ä¸‹ä½æœºé€šä¿¡
+	SetTimer(1, Serial_Delay_Time, NULL);  //  å•ä½ï¼šms
 	for (int i = 0; i < 50000; i++)
 		parameters[i] = i;
 	bool status = st.SendCommand(COMMAND_UPDATE_BADPOINT_TABLE, parameters,50000);
@@ -2575,13 +2987,13 @@ void CGrabDemoDlg::OnBnClickedTest()
 void CGrabDemoDlg::OnBnClickedBpmap()
 {
 	FPGA_Send();
-	// ÏòÏÂÎ»»ú´«ÊäÉÏÎ»»ú¼ÆËãµÄÃ¤Ôª±í
-	SetTimer(1, Serial_Delay_Time, NULL);  //  µ¥Î»£ºms
-	int Height = m_DlgPointer->m_Buffers->GetHeight();//»ñÈ¡µ±Ç°Í¼Ïñ´óĞ¡  768
+	// å‘ä¸‹ä½æœºä¼ è¾“ä¸Šä½æœºè®¡ç®—çš„ç›²å…ƒè¡¨
+	SetTimer(1, Serial_Delay_Time, NULL);  //  å•ä½ï¼šms
+	int Height = m_DlgPointer->m_Buffers->GetHeight();//è·å–å½“å‰å›¾åƒå¤§å°  768
 	int Width = m_DlgPointer->m_Buffers->GetWidth();   //1024
 	long k = 0;
 
-	// ²âÊÔÊ¹ÓÃ £º ÓÃÓÚ¸øÃ¤Ôª±í×Ô¶¨Òå¸³Öµ
+	// æµ‹è¯•ä½¿ç”¨ ï¼š ç”¨äºç»™ç›²å…ƒè¡¨è‡ªå®šä¹‰èµ‹å€¼
 	//for (int i = 0; i < Height; i++)
 	//{
 	//	for (int j = 0; j < Width; j++)
@@ -2602,7 +3014,7 @@ void CGrabDemoDlg::OnBnClickedBpmap()
 			pBlind_Ram[j + i * Width] = 1;
 	}
 
-	//¸ù¾İÃ¤Ôª±í×ª»»ÎªÏÂÎ»»úÄÜ½ÓÊÜµÄÊı¾İ¸ñÊ½
+	//æ ¹æ®ç›²å…ƒè¡¨è½¬æ¢ä¸ºä¸‹ä½æœºèƒ½æ¥å—çš„æ•°æ®æ ¼å¼
 	for (int i = 0; i < Height; i++)
 	{
 		for (int j = 0; j < Width; j++)
@@ -2625,19 +3037,19 @@ void CGrabDemoDlg::OnBnClickedBpmap()
 void CGrabDemoDlg::OnBnClickedTpmap()
 {
 	FPGA_Send();
-	// ÏòÏÂÎ»»ú´«ÊäÉÏÎ»»ú¼ÆËãµÄÁ½µãĞ£Õı±í
-	SetTimer(1, Serial_Delay_Time, NULL);  //  µ¥Î»£ºms
-	int Height = m_DlgPointer->m_Buffers->GetHeight();//»ñÈ¡µ±Ç°Í¼Ïñ´óĞ¡  768
+	// å‘ä¸‹ä½æœºä¼ è¾“ä¸Šä½æœºè®¡ç®—çš„ä¸¤ç‚¹æ ¡æ­£è¡¨
+	SetTimer(1, Serial_Delay_Time, NULL);  //  å•ä½ï¼šms
+	int Height = m_DlgPointer->m_Buffers->GetHeight();//è·å–å½“å‰å›¾åƒå¤§å°  768
 	int Width = m_DlgPointer->m_Buffers->GetWidth();   //1024
 	
-	//ÓÉÓÚ´æ´¢ÏÂÎ»»ú¿É½ÓÊÕµÄÊı¾İÀàĞÍ
+	//ç”±äºå­˜å‚¨ä¸‹ä½æœºå¯æ¥æ”¶çš„æ•°æ®ç±»å‹
 	//unsigned char parameters[1024 * 768];
 	long k = 0;
 	unsigned char* ptmp;
 	//TP_Gain[0] = 0xa00b;
 	//ptmp = (unsigned char*)&TP_Gain[0];
 
-	//²âÊÔ´úÂë£º
+	//æµ‹è¯•ä»£ç ï¼š
 	for (int i = 0; i < 20; i++)
 	{
 		for (int j = 0; j < 20; j++)
@@ -2659,7 +3071,7 @@ void CGrabDemoDlg::OnBnClickedTpmap()
 			TP_Bias[j + i * Width] = -5000;
 		}
 	}
-	//¸ù¾İ½ÃÕı±í×ª»»ÎªÏÂÎ»»úÄÜ½ÓÊÜµÄÊı¾İ¸ñÊ½ unsigned char 
+	//æ ¹æ®çŸ«æ­£è¡¨è½¬æ¢ä¸ºä¸‹ä½æœºèƒ½æ¥å—çš„æ•°æ®æ ¼å¼ unsigned char 
 	uint16_t tmpFloat;
 	for (int i = 0; i < Height; i++)
 	{
@@ -2692,12 +3104,12 @@ void CGrabDemoDlg::OnBnClickedTpmap()
 
 void CGrabDemoDlg::OnBnClickedIntegral()
 {
-	//-----½«°´¼ü±ä»ÒÉ«------
+	//-----å°†æŒ‰é”®å˜ç°è‰²------
 	FPGA_Send();
 
-	// »ñÈ¡Á¬Ğø²É¼¯µÄÖ¡Êı
+	// è·å–è¿ç»­é‡‡é›†çš„å¸§æ•°
 	CString nFrames;
-	int numIntergral;		//²É¼¯µÄÖ¡ÆµÊıs
+	int numIntergral;		//é‡‡é›†çš„å¸§é¢‘æ•°s
 						//GetDlgItem(IDC_Frame_Count)->GetWindowTextW(nFrames);
 	GetDlgItemText(FPGA_InterNum, nFrames);
 	numIntergral = _ttoi(nFrames);
@@ -2707,18 +3119,18 @@ void CGrabDemoDlg::OnBnClickedIntegral()
 		return;
 	}
 
-	//----------·¢ËÍÊı¾İ--------------
+	//----------å‘é€æ•°æ®--------------
 	if (m_ComPortFlag == true)
 	{
-		// ¼ÆÊ±Æ÷1±íÊ¾ÓëÏÂÎ»»úÍ¨ĞÅ
-		SetTimer(1, Serial_Delay_Time, NULL);  //  µ¥Î»£ºms
+		// è®¡æ—¶å™¨1è¡¨ç¤ºä¸ä¸‹ä½æœºé€šä¿¡
+		SetTimer(1, Serial_Delay_Time, NULL);  //  å•ä½ï¼šms
 		bool status = 0;
 		status = st.SendCommand(COMMAND_INTEGRATION_TIME_CONTROL, unsigned char(numIntergral));
 		if (status)
-			GetDlgItem(FPGA_HE)->SetWindowText(_T("ÔöÇ¿_¹Ø±Õ"));
+			GetDlgItem(FPGA_HE)->SetWindowText(_T("å¢å¼º_å…³é—­"));
 		return;
 	}
-	::MessageBox(NULL, _T("´®¿ÚÎ´´ò¿ª£¬ÎŞ·¨·¢ËÍ"), _T("ÌáÊ¾"), MB_OK);
+	::MessageBox(NULL, _T("ä¸²å£æœªæ‰“å¼€ï¼Œæ— æ³•å‘é€"), _T("æç¤º"), MB_OK);
 }
 
 
@@ -2726,18 +3138,18 @@ void CGrabDemoDlg::OnBnClickedIntegral()
 
 void CGrabDemoDlg::OnMouseMove(UINT nFlags, CPoint point)
 {
-	// TODO: ÔÚ´ËÌí¼ÓÏûÏ¢´¦Àí³ÌĞò´úÂëºÍ/»òµ÷ÓÃÄ¬ÈÏÖµ
+	// TODO: åœ¨æ­¤æ·»åŠ æ¶ˆæ¯å¤„ç†ç¨‹åºä»£ç å’Œ/æˆ–è°ƒç”¨é»˜è®¤å€¼
 	//int x=0, y=0;
 	//POINT PP = m_DlgPointer->m_View->GetScrollPos();
 	//m_DlgPointer->m_View->OnHScroll(x);
 	//m_DlgPointer->m_View->OnVScroll(y);
 
 	//CRect  rect;
-	//GetClientRect(&rect);//»ñÈ¡¿Í»§ÇøµÄ´óĞ¡
+	//GetClientRect(&rect);//è·å–å®¢æˆ·åŒºçš„å¤§å°
 	////CPoint point;
-	//GetCursorPos(&point);//»ñÈ¡µ±Ç°Ö¸ÕëµÄ×ø±ê£¨×¢Òâ£¬ÕâÊÇÆÁÄ»µÄ£©
-	//GetWindowRect(&rect);//»ñÈ¡¿Í»§Çø£¨¿Í»§ÇøµÄ×óÉÏ½Ç£©Ïà¶ÔÓÚÆÁÄ»µÄÎ»ÖÃ
-	//int x = (point.x - rect.left);//Í¨¹ı±ä»»µÄµ½¿Í»§ÇøµÄ×ø±ê  
+	//GetCursorPos(&point);//è·å–å½“å‰æŒ‡é’ˆçš„åæ ‡ï¼ˆæ³¨æ„ï¼Œè¿™æ˜¯å±å¹•çš„ï¼‰
+	//GetWindowRect(&rect);//è·å–å®¢æˆ·åŒºï¼ˆå®¢æˆ·åŒºçš„å·¦ä¸Šè§’ï¼‰ç›¸å¯¹äºå±å¹•çš„ä½ç½®
+	//int x = (point.x - rect.left);//é€šè¿‡å˜æ¢çš„åˆ°å®¢æˆ·åŒºçš„åæ ‡  
 	//int y = (point.y - rect.top);
 /*	SIZE Rsize = m_DlgPointer->m_View->GetScrollRange();
 
@@ -2748,7 +3160,7 @@ void CGrabDemoDlg::OnMouseMove(UINT nFlags, CPoint point)
 	SetDlgItemText(PointValue, str);
 
 	//str.Format(_T("x=%d,y=%d"), Rsize.cx, Rsize.cy);
-	////str.Format("Êó±ê´¦ÓÚx=%d,y=%dµÄÎ»ÖÃ", point.x, point.y);
+	////str.Format("é¼ æ ‡å¤„äºx=%d,y=%dçš„ä½ç½®", point.x, point.y);
 	//SetDlgItemText(PointValue, str);
 */
 	__super::OnMouseMove(nFlags, point);
@@ -2757,33 +3169,33 @@ void CGrabDemoDlg::OnMouseMove(UINT nFlags, CPoint point)
 
 void CGrabDemoDlg::OnBnClickedChange1()
 {
-	// TODO: ÔÚ´ËÌí¼Ó¿Ø¼şÍ¨Öª´¦Àí³ÌĞò´úÂë
-	// --------------------µ÷ÓÃI2C·şÎñ-------------------
+	// TODO: åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
+	// --------------------è°ƒç”¨I2CæœåŠ¡-------------------
 	IMyCalc *pMyCalc = NULL;
 	IUnknown *pUnknown = NULL;
-	// 1.³õÊ¼»¯COM¿â
+	// 1.åˆå§‹åŒ–COMåº“
 	HRESULT hr = CoInitialize(NULL);
-	// 2.¸ù¾İÒÑÖªProgIDÕÒ¶ÔÓ¦CLSID
+	// 2.æ ¹æ®å·²çŸ¥ProgIDæ‰¾å¯¹åº”CLSID
 	CLSID CalcID;
-	hr = ::CLSIDFromProgID(L"MyCalc.math", &CalcID);   // ´Ë´¦ÊÇ¿ªÊ¼ÉèÖÃµÄID
+	hr = ::CLSIDFromProgID(L"MyCalc.math", &CalcID);   // æ­¤å¤„æ˜¯å¼€å§‹è®¾ç½®çš„ID
 	if (S_OK != hr)
-		AfxMessageBox(_T("²éÕÒCalcIDÊ§°Ü"));
-	// 3.´´½¨¶ÔÓ¦µÄ½Ó¿ÚÊµÀı
+		AfxMessageBox(_T("æŸ¥æ‰¾CalcIDå¤±è´¥"));
+	// 3.åˆ›å»ºå¯¹åº”çš„æ¥å£å®ä¾‹
 	hr = CoCreateInstance(CalcID, NULL, CLSCTX_LOCAL_SERVER, IID_IUnknown, (void **)&pUnknown);
 	if (S_OK != hr)
-		AfxMessageBox(_T("´´½¨ÊµÀıÊ§°Ü"));
-	// 4.²éÑ¯½Ó¿Ú
+		AfxMessageBox(_T("åˆ›å»ºå®ä¾‹å¤±è´¥"));
+	// 4.æŸ¥è¯¢æ¥å£
 	hr = pUnknown->QueryInterface(IID_IMyCalc, (void **)&pMyCalc);
 	if (S_OK != hr)
-		AfxMessageBox(_T("´´½¨IMyCalcÊ§°Ü"));
-	// 5.µ÷ÓÃÄÚ²¿½Ó¿Ú
+		AfxMessageBox(_T("åˆ›å»ºIMyCalcå¤±è´¥"));
+	// 5.è°ƒç”¨å†…éƒ¨æ¥å£
 
-	//--------------------------ÂëÂÊ¼ÆËã---------------------------
-	//  ÂëÂÊ£ºRu = Rs * b * CRv * CRrs * (Tu/Ts)
+	//--------------------------ç ç‡è®¡ç®—---------------------------
+	//  ç ç‡ï¼šRu = Rs * b * CRv * CRrs * (Tu/Ts)
 	double Rs = double(6048) / 896; double B = 2; double CRv = double(1 / 2); double CRrs = double(188) / 204; double TuTs = double(4) / 5;
 	char InData[4];
 	char OutData[3];
-	char n_in = 2; char n_out = 3;  //ÊäÈë¶àÉÙ¶ÁÈ¡¶àÉÙ£¿
+	char n_in = 2; char n_out = 3;  //è¾“å…¥å¤šå°‘è¯»å–å¤šå°‘ï¼Ÿ
 
 	int nIndex = Combe_I2CMode.GetCurSel();
 	CString strCom; 
@@ -2793,7 +3205,7 @@ void CGrabDemoDlg::OnBnClickedChange1()
 	{
 	case 0:
 	{
-		//-----Ğ´ Rs ------ 2KÄ£Ê½
+		//-----å†™ Rs ------ 2Kæ¨¡å¼
 		InData[0] = 0x1D; InData[1] = 0x00;
 		n_in = 3; n_out = 0;
 		pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
@@ -2801,7 +3213,7 @@ void CGrabDemoDlg::OnBnClickedChange1()
 	}
 	case 1:
 	{
-		//-----Ğ´ Rs ------ 8KÄ£Ê½
+		//-----å†™ Rs ------ 8Kæ¨¡å¼
 		InData[0] = 0x1D; InData[1] = 0x01;
 		n_in = 3; n_out = 0;
 		pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
@@ -2809,7 +3221,7 @@ void CGrabDemoDlg::OnBnClickedChange1()
 	}
 	case 2:
 	{
-		//-----Ğ´ b ------ QPSK
+		//-----å†™ b ------ QPSK
 		InData[0] = 0x1E; InData[1] = 0x00;
 		n_in = 3; n_out = 0;
 		pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
@@ -2817,7 +3229,7 @@ void CGrabDemoDlg::OnBnClickedChange1()
 	}
 	case 3:
 	{
-		//-----Ğ´ b ------ 16-QAM
+		//-----å†™ b ------ 16-QAM
 		InData[0] = 0x1E; InData[1] = 0x01;
 		n_in = 3; n_out = 0;
 		pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
@@ -2825,18 +3237,18 @@ void CGrabDemoDlg::OnBnClickedChange1()
 	}
 	case 4:
 	{
-		//-----Ğ´ b ------ 64-QAM
+		//-----å†™ b ------ 64-QAM
 		InData[0] = 0x1E; InData[1] = 0x02;
 		n_in = 3; n_out = 0;
 		pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
 		break;
 	}
 	default:
-		AfxMessageBox(_T("Î´Æ¥Åäµ½Ñ¡Ïî"));
+		AfxMessageBox(_T("æœªåŒ¹é…åˆ°é€‰é¡¹"));
 		break;
 	}
 
-	//ÇåÀí×ÊÔ´¼°·´³õÊ¼»¯COM×é¼ş
+	//æ¸…ç†èµ„æºåŠååˆå§‹åŒ–COMç»„ä»¶
 	pMyCalc->Release();
 	pUnknown->Release();
 	CoUninitialize();
@@ -2845,33 +3257,33 @@ void CGrabDemoDlg::OnBnClickedChange1()
 
 void CGrabDemoDlg::OnBnClickedChange2()
 {
-	// TODO: ÔÚ´ËÌí¼Ó¿Ø¼şÍ¨Öª´¦Àí³ÌĞò´úÂë
-	// --------------------µ÷ÓÃI2C·şÎñ-------------------
+	// TODO: åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
+	// --------------------è°ƒç”¨I2CæœåŠ¡-------------------
 	IMyCalc *pMyCalc = NULL;
 	IUnknown *pUnknown = NULL;
-	// 1.³õÊ¼»¯COM¿â
+	// 1.åˆå§‹åŒ–COMåº“
 	HRESULT hr = CoInitialize(NULL);
-	// 2.¸ù¾İÒÑÖªProgIDÕÒ¶ÔÓ¦CLSID
+	// 2.æ ¹æ®å·²çŸ¥ProgIDæ‰¾å¯¹åº”CLSID
 	CLSID CalcID;
-	hr = ::CLSIDFromProgID(L"MyCalc.math", &CalcID);   // ´Ë´¦ÊÇ¿ªÊ¼ÉèÖÃµÄID
+	hr = ::CLSIDFromProgID(L"MyCalc.math", &CalcID);   // æ­¤å¤„æ˜¯å¼€å§‹è®¾ç½®çš„ID
 	if (S_OK != hr)
-		AfxMessageBox(_T("²éÕÒCalcIDÊ§°Ü"));
-	// 3.´´½¨¶ÔÓ¦µÄ½Ó¿ÚÊµÀı
+		AfxMessageBox(_T("æŸ¥æ‰¾CalcIDå¤±è´¥"));
+	// 3.åˆ›å»ºå¯¹åº”çš„æ¥å£å®ä¾‹
 	hr = CoCreateInstance(CalcID, NULL, CLSCTX_LOCAL_SERVER, IID_IUnknown, (void **)&pUnknown);
 	if (S_OK != hr)
-		AfxMessageBox(_T("´´½¨ÊµÀıÊ§°Ü"));
-	// 4.²éÑ¯½Ó¿Ú
+		AfxMessageBox(_T("åˆ›å»ºå®ä¾‹å¤±è´¥"));
+	// 4.æŸ¥è¯¢æ¥å£
 	hr = pUnknown->QueryInterface(IID_IMyCalc, (void **)&pMyCalc);
 	if (S_OK != hr)
-		AfxMessageBox(_T("´´½¨IMyCalcÊ§°Ü"));
-	// 5.µ÷ÓÃÄÚ²¿½Ó¿Ú
+		AfxMessageBox(_T("åˆ›å»ºIMyCalcå¤±è´¥"));
+	// 5.è°ƒç”¨å†…éƒ¨æ¥å£
 
-	//--------------------------ÂëÂÊ¼ÆËã---------------------------
-	//  ÂëÂÊ£ºRu = Rs * b * CRv * CRrs * (Tu/Ts)
+	//--------------------------ç ç‡è®¡ç®—---------------------------
+	//  ç ç‡ï¼šRu = Rs * b * CRv * CRrs * (Tu/Ts)
 	double Rs = double(6048) / 896; double B = 2; double CRv = double(1 / 2); double CRrs = double(188) / 204; double TuTs = double(4) / 5;
 	char InData[4];
 	char OutData[3];
-	char n_in = 3; char n_out = 0;  //Ğ´3¶Á0
+	char n_in = 3; char n_out = 0;  //å†™3è¯»0
 
 	int nIndex = Combe_I2CBitSet.GetCurSel();
 	CString strCom;
@@ -2881,45 +3293,45 @@ void CGrabDemoDlg::OnBnClickedChange2()
 	{
 	case 0:
 	{
-		//-----Ğ´ ÄÚ¾À´í£¨¾í»ı£©ÂëÂÊ CRv ------ 1/2
+		//-----å†™ å†…çº é”™ï¼ˆå·ç§¯ï¼‰ç ç‡ CRv ------ 1/2
 		InData[0] = 0x1F; InData[1] = 0x00;
 		pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
 		break;
 	}
 	case 1:
 	{
-		//-----Ğ´ ÄÚ¾À´í£¨¾í»ı£©ÂëÂÊ CRv ------ 2/3
+		//-----å†™ å†…çº é”™ï¼ˆå·ç§¯ï¼‰ç ç‡ CRv ------ 2/3
 		InData[0] = 0x1F; InData[1] = 0x01;
 		pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
 		break;
 	}
 	case 2:
 	{
-		//-----Ğ´ ÄÚ¾À´í£¨¾í»ı£©ÂëÂÊ CRv ------ 3/4
+		//-----å†™ å†…çº é”™ï¼ˆå·ç§¯ï¼‰ç ç‡ CRv ------ 3/4
 		InData[0] = 0x1F; InData[1] = 0x02;
 		pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
 		break;
 	}
 	case 3:
 	{
-		//-----Ğ´ ÄÚ¾À´í£¨¾í»ı£©ÂëÂÊ CRv ------ 5/6
+		//-----å†™ å†…çº é”™ï¼ˆå·ç§¯ï¼‰ç ç‡ CRv ------ 5/6
 		InData[0] = 0x1F; InData[1] = 0x03;
 		pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
 		break;
 	}
 	case 4:
 	{
-		//-----Ğ´ ÄÚ¾À´í£¨¾í»ı£©ÂëÂÊ CRv ------ 7/8
+		//-----å†™ å†…çº é”™ï¼ˆå·ç§¯ï¼‰ç ç‡ CRv ------ 7/8
 		InData[0] = 0x1F; InData[1] = 0x04;
 		pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
 		break;
 	}
 	default:
-		AfxMessageBox(_T("Î´Æ¥Åäµ½Ñ¡Ïî"));
+		AfxMessageBox(_T("æœªåŒ¹é…åˆ°é€‰é¡¹"));
 		break;
 	}
 
-	//ÇåÀí×ÊÔ´¼°·´³õÊ¼»¯COM×é¼ş
+	//æ¸…ç†èµ„æºåŠååˆå§‹åŒ–COMç»„ä»¶
 	pMyCalc->Release();
 	pUnknown->Release();
 	CoUninitialize();
@@ -2928,32 +3340,32 @@ void CGrabDemoDlg::OnBnClickedChange2()
 
 void CGrabDemoDlg::OnBnClickedChange3()
 {
-	// TODO: ÔÚ´ËÌí¼Ó¿Ø¼şÍ¨Öª´¦Àí³ÌĞò´úÂë
-	// --------------------µ÷ÓÃI2C·şÎñ-------------------
+	// TODO: åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
+	// --------------------è°ƒç”¨I2CæœåŠ¡-------------------
 	IMyCalc *pMyCalc = NULL;
 	IUnknown *pUnknown = NULL;
-	// 1.³õÊ¼»¯COM¿â
+	// 1.åˆå§‹åŒ–COMåº“
 	HRESULT hr = CoInitialize(NULL);
-	// 2.¸ù¾İÒÑÖªProgIDÕÒ¶ÔÓ¦CLSID
+	// 2.æ ¹æ®å·²çŸ¥ProgIDæ‰¾å¯¹åº”CLSID
 	CLSID CalcID;
-	hr = ::CLSIDFromProgID(L"MyCalc.math", &CalcID);   // ´Ë´¦ÊÇ¿ªÊ¼ÉèÖÃµÄID
+	hr = ::CLSIDFromProgID(L"MyCalc.math", &CalcID);   // æ­¤å¤„æ˜¯å¼€å§‹è®¾ç½®çš„ID
 	if (S_OK != hr)
-		AfxMessageBox(_T("²éÕÒCalcIDÊ§°Ü"));
-	// 3.´´½¨¶ÔÓ¦µÄ½Ó¿ÚÊµÀı
+		AfxMessageBox(_T("æŸ¥æ‰¾CalcIDå¤±è´¥"));
+	// 3.åˆ›å»ºå¯¹åº”çš„æ¥å£å®ä¾‹
 	hr = CoCreateInstance(CalcID, NULL, CLSCTX_LOCAL_SERVER, IID_IUnknown, (void **)&pUnknown);
 	if (S_OK != hr)
-		AfxMessageBox(_T("´´½¨ÊµÀıÊ§°Ü"));
-	// 4.²éÑ¯½Ó¿Ú
+		AfxMessageBox(_T("åˆ›å»ºå®ä¾‹å¤±è´¥"));
+	// 4.æŸ¥è¯¢æ¥å£
 	hr = pUnknown->QueryInterface(IID_IMyCalc, (void **)&pMyCalc);
 	if (S_OK != hr)
-		AfxMessageBox(_T("´´½¨IMyCalcÊ§°Ü"));
-	// 5.µ÷ÓÃÄÚ²¿½Ó¿Ú
+		AfxMessageBox(_T("åˆ›å»ºIMyCalcå¤±è´¥"));
+	// 5.è°ƒç”¨å†…éƒ¨æ¥å£
 
-	//--------------------------ÂëÂÊ¼ÆËã---------------------------
-	//  ÂëÂÊ£ºRu = Rs * b * CRv * CRrs * (Tu/Ts)
+	//--------------------------ç ç‡è®¡ç®—---------------------------
+	//  ç ç‡ï¼šRu = Rs * b * CRv * CRrs * (Tu/Ts)
 	char InData[4];
 	char OutData[3];
-	char n_in = 2; char n_out = 3;  //ÊäÈë¶àÉÙ¶ÁÈ¡¶àÉÙ£¿
+	char n_in = 2; char n_out = 3;  //è¾“å…¥å¤šå°‘è¯»å–å¤šå°‘ï¼Ÿ
 
 	int nIndex = Combe_I2C_TimeSet.GetCurSel();
 	CString strCom;
@@ -2963,7 +3375,7 @@ void CGrabDemoDlg::OnBnClickedChange3()
 	{
 	case 0:
 	{
-		// ±£»¤¼ä¸ô1/4, 1/8, 1/16, 1/32
+		// ä¿æŠ¤é—´éš”1/4, 1/8, 1/16, 1/32
 		InData[0] = 0x20; InData[1] = 0x00;
 		n_in = 3; n_out = 0;
 		pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
@@ -2971,7 +3383,7 @@ void CGrabDemoDlg::OnBnClickedChange3()
 	}
 	case 1:
 	{
-		//±£»¤¼ä¸ô1/8
+		//ä¿æŠ¤é—´éš”1/8
 		InData[0] = 0x20; InData[1] = 0x01;
 		n_in = 3; n_out = 0;
 		pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
@@ -2979,7 +3391,7 @@ void CGrabDemoDlg::OnBnClickedChange3()
 	}
 	case 2:
 	{
-		//±£»¤¼ä¸ô1/16
+		//ä¿æŠ¤é—´éš”1/16
 		InData[0] = 0x20; InData[1] = 0x02;
 		n_in = 3; n_out = 0;
 		pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
@@ -2987,24 +3399,24 @@ void CGrabDemoDlg::OnBnClickedChange3()
 	}
 	case 3:
 	{
-		//-----±£»¤¼ä¸ô1/32
+		//-----ä¿æŠ¤é—´éš”1/32
 		InData[0] = 0x20; InData[1] = 0x03;
 		n_in = 3; n_out = 0;
 		pMyCalc->COM32(InData[0], InData[1], InData[2], InData[3], n_in - 1, n_out, &OutData[0], &OutData[1], &OutData[2]);
 		break;
 	}
 	default:
-		AfxMessageBox(_T("Î´Æ¥Åäµ½Ñ¡Ïî"));
+		AfxMessageBox(_T("æœªåŒ¹é…åˆ°é€‰é¡¹"));
 		break;
 	}
 
-	//ÇåÀí×ÊÔ´¼°·´³õÊ¼»¯COM×é¼ş
+	//æ¸…ç†èµ„æºåŠååˆå§‹åŒ–COMç»„ä»¶
 	pMyCalc->Release();
 	pUnknown->Release();
 	CoUninitialize();
 }
 
-// ½ÓÊÕÏÂÎ»»úÏûÏ¢ÅúÁ¿´¦Àíº¯Êı£ºÅúÁ¿½«°´¼ü±ä»ÒÉ«
+// æ¥æ”¶ä¸‹ä½æœºæ¶ˆæ¯æ‰¹é‡å¤„ç†å‡½æ•°ï¼šæ‰¹é‡å°†æŒ‰é”®å˜ç°è‰²
 void CGrabDemoDlg::FPGA_Send()
 {
 	GetDlgItem(FPGA_GetLow)->EnableWindow(FALSE);
@@ -3037,62 +3449,62 @@ void CGrabDemoDlg::FPGA_Receive()
 
 void CGrabDemoDlg::OnBnClickedNu()
 {
-	// TODO: ÔÚ´ËÌí¼Ó¿Ø¼şÍ¨Öª´¦Àí³ÌĞò´úÂë
+	// TODO: åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
 	FPGA_Send();
-	SetTimer(1, 50000, NULL);  //  µ¥Î»£ºms
+	SetTimer(1, 50000, NULL);  //  å•ä½ï¼šms
 	if (m_ComPortFlag == true)
 	{
 		bool status = st.SendCommand(COMMAND_NUC_CONTROL, 0x02);
 		if (!status)
-			::MessageBox(NULL, _T("·¢ËÍÃüÁîÊ§°Ü"), _T("ÌáÊ¾"), MB_OK);
+			::MessageBox(NULL, _T("å‘é€å‘½ä»¤å¤±è´¥"), _T("æç¤º"), MB_OK);
 		return;
 	}
-	::MessageBox(NULL, _T("´®¿ÚÎ´´ò¿ª£¬ÎŞ·¨·¢ËÍ"), _T("ÌáÊ¾"), MB_OK);
+	::MessageBox(NULL, _T("ä¸²å£æœªæ‰“å¼€ï¼Œæ— æ³•å‘é€"), _T("æç¤º"), MB_OK);
 }
 
 
 void CGrabDemoDlg::OnBnClickedUpdate()
 {
-	// TODO: ÔÚ´ËÌí¼Ó¿Ø¼şÍ¨Öª´¦Àí³ÌĞò´úÂë
+	// TODO: åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
 	CGrabDemoDlg::FPGA_Receive();
 }
 
-// ÓÃÓÚÌí¼ÓCUDAËã·¨µÄ½Ó¿Ú
+// ç”¨äºæ·»åŠ CUDAç®—æ³•çš„æ¥å£
 void CGrabDemoDlg::CUDA_Algorithm()
 {
-	//ÅĞ¶ÏÊÇ·ñÓĞÔËĞĞËã·¨£¬Ã»ÓĞÔò·µ»Ø
-	//--------Ëã·¨¿ª¹Ø-------
+	//åˆ¤æ–­æ˜¯å¦æœ‰è¿è¡Œç®—æ³•ï¼Œæ²¡æœ‰åˆ™è¿”å›
+	//--------ç®—æ³•å¼€å…³-------
 	int Bilateral_On = ((CButton*)m_DlgPointer->GetDlgItem(PC_bilateralFilter))->GetCheck();
 	int Enhance_On = ((CButton*)m_DlgPointer->GetDlgItem(IDC_H_Enhance))->GetCheck();
 
 	if (!Bilateral_On && !Enhance_On)
 		return;
-	//------------Ê¹ÓÃopencv+CUDAµÄĞ´·¨---------
-	int Height = m_DlgPointer->m_Buffers->GetHeight();//»ñÈ¡µ±Ç°Í¼Ïñ´óĞ¡  768
+	//------------ä½¿ç”¨opencv+CUDAçš„å†™æ³•---------
+	int Height = m_DlgPointer->m_Buffers->GetHeight();//è·å–å½“å‰å›¾åƒå¤§å°  768
 	int Width = m_DlgPointer->m_Buffers->GetWidth();   //1024
 
 
-	// ½«16 bitsÍ¼Ïñ×ªÎª 8bits½øĞĞ opencv + cuda ´¦Àí
+	// å°†16 bitså›¾åƒè½¬ä¸º 8bitsè¿›è¡Œ opencv + cuda å¤„ç†
 	for (int i = 0; i < Height; i++)
 		for (int j = 0; j < Width; j++)
 			rImage_uchar[i * Width + j] = rImage[i * Width + j] >> 8;
-	// srcÎªÔ­Í¼Ïñ£¬grayÎª´¦ÀíºóÍ¼Ïñ£¬histÎªÖ±·½Í¼
+	// srcä¸ºåŸå›¾åƒï¼Œgrayä¸ºå¤„ç†åå›¾åƒï¼Œhistä¸ºç›´æ–¹å›¾
 	Mat src_host = Mat(Height, Width, CV_8UC1, rImage_uchar);
 	Mat gray_host;
 	Mat hist_host;
 	GpuMat src, gray, hist;
 
-	// Ë«±ßÂË²¨Ëã·¨ÊµÏÖ£º
+	// åŒè¾¹æ»¤æ³¢ç®—æ³•å®ç°ï¼š
 	if (Bilateral_On > 0)
 	{		
 		src.upload(src_host);
 		cv::cuda::bilateralFilter(src, gray, 8, 15, 15);
 		gray.download(gray_host);
 	}
-	//Ö±·½Í¼ÔöÇ¿Ëã·¨ÊµÏÖ
+	//ç›´æ–¹å›¾å¢å¼ºç®—æ³•å®ç°
 	if (Enhance_On)
 	{
-		//Ã»½øĞĞË«±ßÂË²¨£¬Ö±½Óµ÷ÓÃÔ­Í¼ || Èç¹ûÒÑ¾­Ö´ĞĞË«±ßÂË²¨£¬ÔòÖ±½ÓÉÏ´«Ô­Í¼Ïñµ½gray
+		//æ²¡è¿›è¡ŒåŒè¾¹æ»¤æ³¢ï¼Œç›´æ¥è°ƒç”¨åŸå›¾ || å¦‚æœå·²ç»æ‰§è¡ŒåŒè¾¹æ»¤æ³¢ï¼Œåˆ™ç›´æ¥ä¸Šä¼ åŸå›¾åƒåˆ°gray
 		if (Bilateral_On <= 0)
 		{
 			gray.upload(src_host);
@@ -3100,8 +3512,8 @@ void CGrabDemoDlg::CUDA_Algorithm()
 		}		
 		cv::cuda::calcHist(gray, hist);
 		hist.download(hist_host);
-		//-------Ë«Æ½Ì¨½ÃÕı Õë¶Ô0-255»Ò¶È¼¶ -------
-		int L = 0; //ÓÃÓÚ´æ´¢Ö±·½Í¼µÄ·ÇÁãÏîÊıÄ¿
+		//-------åŒå¹³å°çŸ«æ­£ é’ˆå¯¹0-255ç°åº¦çº§ -------
+		int L = 0; //ç”¨äºå­˜å‚¨ç›´æ–¹å›¾çš„éé›¶é¡¹æ•°ç›®
 		double Sum = 0;
 		int count = 0;
 		//float* data;
@@ -3127,9 +3539,9 @@ void CGrabDemoDlg::CUDA_Algorithm()
 		}
 		int Tup = 3000;// Sum / count;
 		int Tdown = 10;// min(Height*Width, Tup*L) / 256;
-		//------- ÓÃË«Æ½Ì¨ÃÅÏŞ½ÃÕı ½ÃÕıÖ±·½Í¼ ------------
+		//------- ç”¨åŒå¹³å°é—¨é™çŸ«æ­£ çŸ«æ­£ç›´æ–¹å›¾ ------------
 
-		Sum = 0; //ÖØĞÂÍ³¼Æ×ÜÊı£¬ÓÃÓÚºóĞø¼ÆËã¸ÅÂÊÖ±·½Í¼
+		Sum = 0; //é‡æ–°ç»Ÿè®¡æ€»æ•°ï¼Œç”¨äºåç»­è®¡ç®—æ¦‚ç‡ç›´æ–¹å›¾
 		for (int i = 0; i < 256; i++)
 		{
 			if (tmp_hist[i] < Tdown)
@@ -3138,14 +3550,14 @@ void CGrabDemoDlg::CUDA_Algorithm()
 				tmp_hist[i] = Tup;
 			Sum += tmp_hist[i];
 		}
-		// »æÖÆ¸ÅÂÊÃÜ¶ÈÍ¼
+		// ç»˜åˆ¶æ¦‚ç‡å¯†åº¦å›¾
 		for (int i = 1; i < 256; i++)
 		{
 			tmp_hist[i] = tmp_hist[i] + tmp_hist[i - 1];
 		}
-		//-------- ½ÃÕıÍ¼Ïñ ----------
-		unsigned char* inData = src_host.ptr<unsigned char>(0); //Ô­Í¼
-		unsigned char* outData = gray_host.ptr<unsigned char>(0); //´¦ÀíºóÍ¼Ïñ
+		//-------- çŸ«æ­£å›¾åƒ ----------
+		unsigned char* inData = src_host.ptr<unsigned char>(0); //åŸå›¾
+		unsigned char* outData = gray_host.ptr<unsigned char>(0); //å¤„ç†åå›¾åƒ
 		int tmp;
 		for (int i = 0; i < Height; i++)
 			for (int j = 0; j < Width; j++)
@@ -3161,7 +3573,7 @@ void CGrabDemoDlg::CUDA_Algorithm()
 	}
 
 
-	//------½«Êı¾İ¸ñÊ½ 8 bits ±äÎª 16 bits ------------
+	//------å°†æ•°æ®æ ¼å¼ 8 bits å˜ä¸º 16 bits ------------
 	unsigned char* rdata;
 	rdata = gray_host.ptr<unsigned char>(0);
 	for (int i = 0; i < Height; i++)
@@ -3174,20 +3586,20 @@ void CGrabDemoDlg::CUDA_Algorithm()
 
 void CGrabDemoDlg::OnBnClickedWinchange()
 {
-	// ¿ØÖÆÏÂÎ»»ú½øĞĞ¿ª´°´¦Àí
-	//-----½«°´¼ü±ä»ÒÉ«------
+	// æ§åˆ¶ä¸‹ä½æœºè¿›è¡Œå¼€çª—å¤„ç†
+	//-----å°†æŒ‰é”®å˜ç°è‰²------
 	FPGA_Send();
 
-	// »ñÈ¡Á¬Ğø²É¼¯µÄÖ¡Êı
+	// è·å–è¿ç»­é‡‡é›†çš„å¸§æ•°
 	CString nFrames;
-	int Win_H, Win_W;		//²É¼¯µÄÖ¡ÆµÊıs
+	int Win_H, Win_W;		//é‡‡é›†çš„å¸§é¢‘æ•°s
 							//GetDlgItem(IDC_Frame_Count)->GetWindowTextW(nFrames);
 	GetDlgItemText(FPGA_WinHeight, nFrames);
 	Win_H = _ttoi(nFrames);
 	GetDlgItemText(FPGA_WinWidth, nFrames);
 	Win_W = _ttoi(nFrames);
 
-	// ´°¿Ú´óĞ¡ÏŞÖÆ£º0 <= H£¨Y×ø±ê£©<=511  ||   128 <= W (X×ø±ê) <= 639
+	// çª—å£å¤§å°é™åˆ¶ï¼š0 <= Hï¼ˆYåæ ‡ï¼‰<=511  ||   128 <= W (Xåæ ‡) <= 639
 	if (Win_H < 0 || Win_H>511 || Win_W < 128 || Win_W > 639)
 	{
 		MessageBox(_T("The Window Size is Out of Range !"));
@@ -3195,7 +3607,7 @@ void CGrabDemoDlg::OnBnClickedWinchange()
 	}
 	int index = 0;
 
-	//------´«Êä×ø±êÊı¾İ£ºdata[0],[1]ÎªYmin£¬[2],[3]ÎªYmax£¬[4]ÎªXmin£¬[5]ÎªXmax ¶¼ÊÇ°ËÎ»Êı¾İ´«Êä
+	//------ä¼ è¾“åæ ‡æ•°æ®ï¼šdata[0],[1]ä¸ºYminï¼Œ[2],[3]ä¸ºYmaxï¼Œ[4]ä¸ºXminï¼Œ[5]ä¸ºXmax éƒ½æ˜¯å…«ä½æ•°æ®ä¼ è¾“
 	transfer_data[index++] = 0x00;
 	transfer_data[index++] = 0x00;
 	unsigned short tmpValue = unsigned short(Win_H);
@@ -3204,46 +3616,177 @@ void CGrabDemoDlg::OnBnClickedWinchange()
 	transfer_data[index++] = 0x00;
 	transfer_data[index++] = unsigned short(Win_W / 4); 
 
-	//----------·¢ËÍÊı¾İ--------------
+	//----------å‘é€æ•°æ®--------------
 	if (m_ComPortFlag == true)
 	{
-		// ¼ÆÊ±Æ÷1±íÊ¾ÓëÏÂÎ»»úÍ¨ĞÅ
-		SetTimer(1, Serial_Delay_Time, NULL);  //  µ¥Î»£ºms
+		// è®¡æ—¶å™¨1è¡¨ç¤ºä¸ä¸‹ä½æœºé€šä¿¡
+		SetTimer(1, Serial_Delay_Time, NULL);  //  å•ä½ï¼šms
 		bool status = 0;
 		status = st.SendCommand(COMMAND_WINDOW_MODE_SWITCH, transfer_data, 6);
 		if (status)
-			GetDlgItem(FPGA_HE)->SetWindowText(_T("ÔöÇ¿_¹Ø±Õ"));
+			GetDlgItem(FPGA_HE)->SetWindowText(_T("å¢å¼º_å…³é—­"));
 		return;
 	}
-	::MessageBox(NULL, _T("´®¿ÚÎ´´ò¿ª£¬ÎŞ·¨·¢ËÍ"), _T("ÌáÊ¾"), MB_OK);
+	::MessageBox(NULL, _T("ä¸²å£æœªæ‰“å¼€ï¼Œæ— æ³•å‘é€"), _T("æç¤º"), MB_OK);
 }
 
 
-void CGrabDemoDlg::OnBnClickedLocalEnlarge()
+void CGrabDemoDlg::OnBnClickedLocalEnlarge()//ç•¸å˜çŸ«æ­£
 {
-	// TODO: ÔÚ´ËÌí¼Ó¿Ø¼şÍ¨Öª´¦Àí³ÌĞò´úÂë
+	// TODO: åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
+	CButton* supercheckItem = (CButton*)GetDlgItem(IDC_SUPER_CHECK);  // è·å–è§†è§’åˆæˆID
+	CButton* depthcheckItem = (CButton*)GetDlgItem(IDC_DEPTH_CHECK);  // è·å–æ·±åº¦ä¼°è®¡ID
+	CButton* jibiancheckItem = (CButton*)GetDlgItem(IDC_Local_Enlarge); //è·å–ç•¸å˜çŸ«æ­£ID
+	CButton* mubiaocheckItem = (CButton*)GetDlgItem(IDC_DETECTION_CHECK); //è·å–ç›®æ ‡æ£€æµ‹ID
+
+	//if (supercheckItem && depthcheckItem && jibiancheckItem && mubiaocheckItem)
+	//{
+	//	if (jibiancheckItem->GetCheck() == BST_UNCHECKED)//BST_UNCHECKEDè¡¨ç¤ºæœªé€‰ä¸­
+	//	{
+	//		depthcheckItem->EnableWindow(FALSE);
+	//		depthcheckItem->SetCheck(BST_UNCHECKED); // å¯é€‰ï¼šå–æ¶ˆé€‰ä¸­
+	//		mubiaocheckItem->EnableWindow(FALSE);
+ //           mubiaocheckItem->SetCheck(BST_UNCHECKED);
+	//		supercheckItem->EnableWindow(FALSE);
+	//		supercheckItem->SetCheck(BST_UNCHECKED);
+
+	//	}
+	//	else
+	//	{
+	//		mubiaocheckItem->EnableWindow(TRUE);
+	//		supercheckItem->EnableWindow(TRUE);
+	//	}
+	//}
+	UpdateSavePath();
 }
 
 
 void CGrabDemoDlg::OnStnClickedViewWnd2()
 {
-	// TODO: ÔÚ´ËÌí¼Ó¿Ø¼şÍ¨Öª´¦Àí³ÌĞò´úÂë
+	// TODO: åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
 }
 
 
-void CGrabDemoDlg::OnBnClickedCheck1()
+void CGrabDemoDlg::OnBnClickedCheck1()//ç›®æ ‡æ£€æµ‹å¯¹åº”å‡½æ•°
 {
-	// TODO: ÔÚ´ËÌí¼Ó¿Ø¼şÍ¨Öª´¦Àí³ÌĞò´úÂë
+	// TODO: åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
+	CButton* mubiaocheckItem = (CButton*)GetDlgItem(IDC_DETECTION_CHECK); //è·å–ç›®æ ‡æ£€æµ‹ID
+	CButton* depthcheckItem = (CButton*)GetDlgItem(IDC_DEPTH_CHECK);  // æ·±åº¦ä¼°è®¡
+	CButton* supercheckItem = (CButton*)GetDlgItem(IDC_SUPER_CHECK);  // è§†è§’åˆæˆ
+
+	//if (mubiaocheckItem && depthcheckItem)
+	//{
+	//	if (mubiaocheckItem->GetCheck() == BST_UNCHECKED && supercheckItem->GetCheck() == BST_CHECKED)
+	//	{
+	//		depthcheckItem->EnableWindow(TRUE);  // æ·±åº¦ä¼°è®¡ é€‰ä¸­
+	//	}
+	//	else
+	//	{
+	//		depthcheckItem->EnableWindow(FALSE);  // æ·±åº¦ä¼°è®¡ ç½®ç°
+	//		depthcheckItem->SetCheck(BST_UNCHECKED); // å¯é€‰ï¼šå–æ¶ˆé€‰ä¸­
+	//	}
+	//}
+	UpdateSavePath();
+
 }
 
 
-void CGrabDemoDlg::OnBnClickedDepthCheck()
+void CGrabDemoDlg::OnBnClickedDepthCheck()//æ·±åº¦ä¼°è®¡
 {
-	// TODO: ÔÚ´ËÌí¼Ó¿Ø¼şÍ¨Öª´¦Àí³ÌĞò´úÂë
+	// TODO: åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
+	UpdateSavePath();
 }
 
 
 void CGrabDemoDlg::OnBnClickedSuperCheck()
 {
-	// TODO: ÔÚ´ËÌí¼Ó¿Ø¼şÍ¨Öª´¦Àí³ÌĞò´úÂë
+	// TODO: åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
+	CButton* mubiaocheckItem = (CButton*)GetDlgItem(IDC_DETECTION_CHECK); //è·å–ç›®æ ‡æ£€æµ‹ID
+	CButton* supercheckItem = (CButton*)GetDlgItem(IDC_SUPER_CHECK);  // è§†è§’åˆæˆ
+	CButton* depthcheckItem = (CButton*)GetDlgItem(IDC_DEPTH_CHECK);  // æ·±åº¦ä¼°è®¡
+
+	//if (supercheckItem && depthcheckItem)
+	//{
+	//	if (supercheckItem->GetCheck() == BST_CHECKED && mubiaocheckItem->GetCheck() == BST_UNCHECKED)
+	//	{
+	//		depthcheckItem->EnableWindow(TRUE);   // æ·±åº¦ä¼°è®¡ å¯ç”¨
+	//		
+	//	}
+	//	else
+	//	{
+	//		depthcheckItem->EnableWindow(FALSE);  // æ·±åº¦ä¼°è®¡ ç½®ç°
+	//		depthcheckItem->SetCheck(BST_UNCHECKED); // å¯é€‰ï¼šå–æ¶ˆé€‰ä¸­
+	//	}
+	//}
+	UpdateSavePath();
+}
+
+
+void CGrabDemoDlg::OnCbnSelchangeCombo1()
+{
+		TCHAR exePath[MAX_PATH];
+		GetModuleFileName(NULL, exePath, MAX_PATH);
+		std::wstring wstrExePath(exePath);
+		std::string strExePath(wstrExePath.begin(), wstrExePath.end());
+
+		size_t pos = strExePath.find_last_of("\\/");
+		std::string exeDir = (pos != std::string::npos) ? strExePath.substr(0, pos) : "";
+		std::string detect_enginePath = exeDir + "\\yolov8_1017.engine";
+		std::string depth_enginePath = exeDir + "\\depth_anything_v2_vits_518x616.engine";
+		std::string super_enginePath;
+
+		int nSelIndex = m_comboBox.GetCurSel();
+		switch (nSelIndex)
+		{
+		case 0: // "æ­£å¸¸"
+			AfxMessageBox(_T("é€‰æ‹©äº†ï¼šæ­£å¸¸"));
+			super_enginePath = exeDir + "\\IINet_scale2_142x170.engine";
+			break;
+
+		case 1: // "äº‘"
+			AfxMessageBox(_T("é€‰æ‹©äº†ï¼šäº‘"));
+			super_enginePath = exeDir + "\\IINet_scale2_142x170.engine";
+			break;
+
+		case 2: // "é›¾"
+			AfxMessageBox(_T("é€‰æ‹©äº†ï¼šé›¾"));
+			super_enginePath = exeDir + "\\IINet_scale2_142x170.engine";
+			break;
+
+		case 3: // "é›¨"
+			AfxMessageBox(_T("é€‰æ‹©äº†ï¼šé›¨"));
+			super_enginePath = exeDir + "\\IINet_scale2_142x170.engine";
+			break;
+
+        case 4: // "çƒŸ"
+			AfxMessageBox(_T("é€‰æ‹©äº†ï¼šçƒŸ"));
+			super_enginePath = exeDir + "\\IINet_scale2_142x170.engine";
+			break;
+
+		default:
+			break;
+		}
+		m_super_tensorRT = new MyTensorRT(super_enginePath, true);
+		//// å¦‚æœä½ æ­£åœ¨æµ‹è¯•è¶…åˆ†æ¨¡å‹:
+		m_super_tensorRT->setModelType(ModelType::SuperResolution_IINet);
+		////gpu é¢„çƒ­
+		m_super_tensorRT->warmup(5);
+		UpdateSavePath();
+}
+
+
+void CGrabDemoDlg::OnBnClickedTrackCheck()
+{
+	// TODO: åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
+}
+
+
+void CGrabDemoDlg::OnEnChangeframes()
+{
+	// TODO:  å¦‚æœè¯¥æ§ä»¶æ˜¯ RICHEDIT æ§ä»¶ï¼Œå®ƒå°†ä¸
+	// å‘é€æ­¤é€šçŸ¥ï¼Œé™¤éé‡å†™ __super::OnInitDialog()
+	// å‡½æ•°å¹¶è°ƒç”¨ CRichEditCtrl().SetEventMask()ï¼Œ
+	// åŒæ—¶å°† ENM_CHANGE æ ‡å¿—â€œæˆ–â€è¿ç®—åˆ°æ©ç ä¸­ã€‚
+
+	// TODO:  åœ¨æ­¤æ·»åŠ æ§ä»¶é€šçŸ¥å¤„ç†ç¨‹åºä»£ç 
 }

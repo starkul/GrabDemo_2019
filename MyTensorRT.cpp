@@ -492,6 +492,7 @@ void MyTensorRT::preprocessImage_Detect(const cv::Mat& inputImage)
     nvinfer1::Dims dims = getInputDims();
     const int modelHeight = dims.d[2];  // 640
     const int modelWidth = dims.d[3];   // 640
+
     cv::cuda::GpuMat gpu_input;
     // 1. 上传到GPU
     if (gpu_input.empty()) {
@@ -541,8 +542,8 @@ void MyTensorRT::preprocessImage_Detect(const cv::Mat& inputImage)
     gpu_rgb.convertTo(gpu_normalized, CV_32FC3, 1.0f / 255.0f);
     
     // 6. 标准化 - 使用核函数直接处理
-    //const float mean[3] = { 0.485f, 0.456f, 0.406f };
-    //const float std[3] = { 0.229f, 0.224f, 0.225f };
+    //const float dummy_mean[3] = { 0.485f, 0.456f, 0.406f };
+    //const float dummy_std[3] = { 0.229f, 0.224f, 0.225f };
     const float dummy_mean[3] = { 0.0f, 0.0f, 0.0f };
     const float dummy_std[3] = { 1.0f, 1.0f, 1.0f };
     cudaStreamSynchronize(m_stream);
@@ -861,7 +862,7 @@ std::vector<Detection> MyTensorRT::postprocessOutputYOLOV8(int batchSize)
         }
 
         // 应用置信度阈值
-        if (confidence < 0.25) continue;
+        //if (confidence < 0.25) continue;
 
         // 映射回原始图像坐标 (与Python一致)
         float cx_orig = (cx_padded - dw) / scale;
@@ -1114,7 +1115,7 @@ std::vector<Detection> MyTensorRT::applyNMS(const std::vector<Detection>& candid
     }
 
     std::vector<int> indices;
-    cv::dnn::NMSBoxes(boxes, scores, 0.5f, 0.5, indices);  
+    cv::dnn::NMSBoxes(boxes, scores, 0.30f, 0.70f, indices);  
 
     std::vector<Detection> result;
     for (int i : indices) {
@@ -1152,29 +1153,21 @@ std::string MyTensorRT::getClassName(int classId) const
     std::string name = "other";
     if (classId == 0)
     {
-        name = "gate";
+        name = "people";
     }
     else if (classId == 1)
     {
-        name = "vehicle";
+        name = "tank";
     }
-    else if (classId == 2) 
-    {
-        name = "people";
-    }
-    else if (classId == 3)
-    {
-        name = "weapon";
-    }
-    else if (classId == 4)
-    {
-        name = "dog";
-    }
-    else if (classId == 5)
+    else if (classId == 2)
     {
         name = "airplane";
     }
-    return name;  
+    else if (classId == 3)
+    {
+        name = "vehicle";
+    }
+    return name;
 }
 // 新增方法的实现
 void MyTensorRT::setModelType(ModelType type)

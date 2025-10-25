@@ -3,8 +3,8 @@
 
 
 DistortionCailbration::DistortionCailbration() {
-	std::vector<int> x_coords = { 0, 170, 445, 640 }; // x-axis splits
-	std::vector<int> y_coords = { 0, 160, 380, 512 }; // y-axis splits
+	std::vector<int> x_coords = { 0, 203, 444, 640 }; // x-axis splits
+	std::vector<int> y_coords = { 0, 170, 353, 512 }; // y-axis splits
 	std::string filename = "calibration_data_real.yml";
 	std::vector<cv::Mat> intrinsic_matrices;
 	std::vector<cv::Mat> dist_coeffs;
@@ -55,8 +55,8 @@ DistortionCailbration::DistortionCailbration() {
 
 cv::Mat DistortionCailbration::process(cv::Mat img) {
 	// Define the split positions based on your specified coordinates
-	std::vector<int> x_coords = { 0, 170, 445, 640 }; // x-axis splits
-	std::vector<int> y_coords = { 0, 160, 380, 512 }; // y-axis splits
+	std::vector<int> x_coords = { 0, 203, 444, 640 }; // x-axis splits
+	std::vector<int> y_coords = { 0, 170, 353, 512 }; // y-axis splits
 
 													  // Create a 3x3 grid to store the sub-images (3 rows and 3 columns)
 	std::vector<std::vector<cv::Mat>> rows(3, std::vector<cv::Mat>(3)); // 3 rows and 3 columns

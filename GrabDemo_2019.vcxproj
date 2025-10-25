@@ -24,6 +24,7 @@
     <ClCompile Include="GrabDemoDlg.cpp" />
     <ClCompile Include="IRCMD_COM\ComFrame.cpp" />
     <ClCompile Include="IRCMD_COM\SerialThread.cpp" />
+    <ClCompile Include="tracker_utils.cpp" />
     <ClCompile Include="MyTensorRT.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -37,6 +38,7 @@
     <ClInclude Include="MyTensorRT.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="StdAfx.h" />
+    <ClInclude Include="tracker_utils.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="GrabDemo.rc" />
@@ -205,6 +207,7 @@
       <PreprocessorDefinitions>_WINDOWS;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeaderFile>stdafx.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>D:\App\opencv\opencv4.5.5\cudabuild\build\install\include;C:\Program Files\Teledyne DALSA\Sapera\Include;C:\Program Files\Teledyne DALSA\Sapera\Classes\Gui;C:\Program Files\Teledyne DALSA\Sapera\Classes\Basic;E:\INLF\onnx\Tensor\TensorRT-10.11.0.33\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
