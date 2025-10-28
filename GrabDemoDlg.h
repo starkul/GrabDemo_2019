@@ -86,6 +86,7 @@ protected:
 	static MyTensorRT* m_detect_tensorRT; // TensorRT检测模型指针
 	static MyTensorRT* m_depth_tensorRT; // TensorRT深度估计模型指针
 	static MyTensorRT* m_track_tensorRT; // TensorRT深度估计模型指针
+	static MyTensorRT* m_detectssd_tensorRT;
 	BOOL m_IsSignalDetected;   // TRUE if camera signal is detected 相机信号是否被检测到
 
 	 // Generated message map functions
@@ -181,6 +182,7 @@ public:
 	afx_msg void OnStnClickedViewWnd2(); // ViewWnd2控件单击消息
 private:
 	cv::Mat extractAndResizeCenterView(const cv::Mat& sourceImage); // 提取并调整中心视图大小
+	cv::Mat extractCenterView(const cv::Mat& sourceImage); // 提取
 	TrackerUtils* m_tracker = nullptr;   // 跟踪模块指针
 	TrackingResult m_trackResult;        // 存储每帧跟踪结果
 	bool m_enableTracking = false;       // 是否开启跟踪
@@ -197,6 +199,9 @@ private:
 public:
 	afx_msg void OnBnClickedTrackCheck();
 	afx_msg void OnEnChangeframes();
+	// 图片存储地址
+	CString m_strSavePath = "E:\INLF\QZB\Sapera\Demos\Classes\Vc\cstrWorksavepath\Normal\Normal";
+	afx_msg void OnBnClickedDetectionCheck2();
 };
 //{{AFX_INSERT_LOCATION}}
 // Microsoft Developer Studio will insert additional declarations immediately before the previous line.

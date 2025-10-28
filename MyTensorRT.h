@@ -26,6 +26,7 @@ struct PreprocessParams {
 enum class ModelType {
     Unknown,
     SuperResolution_IINet,
+    SuperResolution_View_Synthesis,
     DepthEstimation_DepthAnything,
     ObjectDetection_YOLOv8
 };
@@ -60,7 +61,9 @@ public:
     // ===================================================
     void preprocessImage_Super(const cv::Mat& inputImage);
     cv::Mat postprocessOutput_Super(int batchSize);
+    cv::Mat postprocessOutput_Super2(int batchSize);
     void preprocessImage_LightField(const cv::Mat& nine_grid_image, int angular_resolution);
+    void preprocessImage_LightField2(const cv::Mat& nine_grid_image);
 private:
     void loadEngine(const std::string& path);
     void setupMemory();

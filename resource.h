@@ -88,6 +88,8 @@
 #define I2C_Change3                     1319
 #define PC_bilateralFilter              1320
 #define FPGA_Bits                       1321
+#define SAVE_PATH                       1321
+#define SAVE_PATH_ID                    1321
 #define FPGA_BitsRates                  1322
 #define FPGA_NU                         1323
 #define FPGA_Update                     1324
@@ -96,12 +98,14 @@
 #define PointValue2                     1327
 #define IDC_BUTTON1                     1328
 #define FPGA_WinChange                  1328
+#define FPGA_Bits2                      1329
 #define IDC_CHECK1                      1330
 #define IDC_DETECTION_CHECK             1330
 #define IDC_TRACK_CHECK                 1331
 #define IDC_DEPTH_CHECK                 1332
 #define IDC_CHECK2                      1333
 #define IDC_SUPER_CHECK                 1333
+#define IDC_DETECTION_CHECK2            1334
 #define IDC_COMBO3                      1338
 #define IDC_COMBO1                      1338
 

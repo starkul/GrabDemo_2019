@@ -115,6 +115,7 @@ MyTensorRT* CGrabDemoDlg::m_super_tensorRT = nullptr;
 MyTensorRT* CGrabDemoDlg::m_detect_tensorRT = nullptr;
 MyTensorRT* CGrabDemoDlg::m_depth_tensorRT = nullptr;
 MyTensorRT* CGrabDemoDlg::m_track_tensorRT = nullptr;
+MyTensorRT* CGrabDemoDlg::m_detectssd_tensorRT = nullptr;
 
 unsigned short rImage[1280*1024] = { 0 };   //GPU处理的图像数据
 unsigned short *Image = rImage;
@@ -242,6 +243,7 @@ CGrabDemoDlg::CGrabDemoDlg(CWnd* pParent /*=NULL*/)
    : CDialog(CGrabDemoDlg::IDD, pParent)
 	, mHeight(0)
 	, mWidth(0)
+	, m_strSavePath(_T(""))
 {
    //{{AFX_DATA_INIT(CGrabDemoDlg)
    // NOTE: the ClassWizard will add member initialization here
@@ -279,15 +281,16 @@ void CGrabDemoDlg::UpdateSavePath()//更新保存路径
 	// 开始构建路径
 	CString path = basePath + "\\" + weather;
 
-	CButton* pBtn_DEPTH = (CButton*)GetDlgItem(IDC_DEPTH_CHECK);
-    CButton* pBtn_SUPER = (CButton*)GetDlgItem(IDC_SUPER_CHECK);
-    CButton* pBtn_DETECTION = (CButton*)GetDlgItem(IDC_DETECTION_CHECK);
-	CButton* pBtn_DC= (CButton*)GetDlgItem(IDC_Local_Enlarge);
+	CButton* supercheckItem = (CButton*)GetDlgItem(IDC_SUPER_CHECK);  // 获取视角合成ID
+	CButton* depthcheckItem = (CButton*)GetDlgItem(IDC_DEPTH_CHECK);  // 获取深度估计ID
+	CButton* jibiancheckItem = (CButton*)GetDlgItem(IDC_Local_Enlarge); //获取畸变矫正ID
+	CButton* mubiaocheckItem = (CButton*)GetDlgItem(IDC_DETECTION_CHECK); //获取目标检测ID
+	CButton* trackcheckItem = (CButton*)GetDlgItem(IDC_TRACK_CHECK); //目标追踪
+	CButton* mubiaocheckItem2 = (CButton*)GetDlgItem(IDC_DETECTION_CHECK2);
 
-
-	if (pBtn_SUPER && pBtn_SUPER->GetCheck() == BST_CHECKED)
+	if (supercheckItem && supercheckItem->GetCheck() == BST_CHECKED)
 	{
-		if (pBtn_DEPTH && pBtn_DEPTH->GetCheck() == BST_CHECKED)
+		if (depthcheckItem && depthcheckItem->GetCheck() == BST_CHECKED)
 		{
             path += _T("\\Depth");
 		}
@@ -296,13 +299,21 @@ void CGrabDemoDlg::UpdateSavePath()//更新保存路径
             path += _T("\\SuperResolution");
 		}
 	}
-	else if (pBtn_DETECTION && pBtn_DETECTION->GetCheck() == BST_CHECKED)
+	else if (mubiaocheckItem && mubiaocheckItem->GetCheck() == BST_CHECKED)
 	{
 		path += _T("\\Detection");
 	}
+    else if (trackcheckItem && trackcheckItem->GetCheck() == BST_CHECKED)
+	{
+		path += _T("\\Track");
+	}
+    else if (mubiaocheckItem2 && mubiaocheckItem2->GetCheck() == BST_CHECKED)
+	{
+		path += _T("\\Detection2");
+	}
 	else
 	{
-		if (pBtn_DC && pBtn_DC->GetCheck() == BST_CHECKED)
+		if (jibiancheckItem && jibiancheckItem->GetCheck() == BST_CHECKED)
 		{
 			path += _T("\\DistortionCailbration");
 		}
@@ -321,7 +332,12 @@ void CGrabDemoDlg::UpdateSavePath()//更新保存路径
 			AfxMessageBox(_T("无法创建保存路径，请检查磁盘权限或路径是否有效：\n") + m_cstrWorkPath);
 		}
 	}
-	AfxMessageBox(_T("保存路径已更新：\n") + m_cstrWorkPath);
+	//AfxMessageBox(_T("保存路径已更新：\n") + m_cstrWorkPath);
+	//CString strNewText =  m_cstrWorkPath;
+	//SetDlgItemText(SAVE_PATH_ID, strNewText);
+
+	m_strSavePath = m_cstrWorkPath;
+	UpdateData(FALSE);
 }
 
 
@@ -350,6 +366,7 @@ void CGrabDemoDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, PC_bilateralFilter, PC_BilateralFilter);
 	//  DDX_Control(pDX, IDC_VIEW_WND2, m_ImageWnd2);
 	DDX_Control(pDX, IDC_COMBO1, m_comboBox);
+	DDX_Text(pDX, SAVE_PATH_ID, m_strSavePath);
 }
 
 BEGIN_MESSAGE_MAP(CGrabDemoDlg, CDialog)
@@ -425,6 +442,7 @@ BEGIN_MESSAGE_MAP(CGrabDemoDlg, CDialog)
 	ON_CBN_SELCHANGE(IDC_COMBO1, &CGrabDemoDlg::OnCbnSelchangeCombo1)
 	ON_BN_CLICKED(IDC_TRACK_CHECK, &CGrabDemoDlg::OnBnClickedTrackCheck)
 	ON_EN_CHANGE(FPGA_frames, &CGrabDemoDlg::OnEnChangeframes)
+	ON_BN_CLICKED(IDC_DETECTION_CHECK2, &CGrabDemoDlg::OnBnClickedDetectionCheck2)
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
@@ -546,35 +564,68 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 	  // }
 
    //}
-   if (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_Local_Enlarge))->GetCheck()) {
+	bool isLocalChecked = (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_Local_Enlarge))->GetCheck());
+	bool isSuperChecked = (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck());
+	bool isDepthChecked = (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_DEPTH_CHECK))->GetCheck());
+	// 检查两个检测按钮的状态
+	bool isDetection1Checked = (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_DETECTION_CHECK))->GetCheck());
+	bool isDetection2Checked = (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_DETECTION_CHECK2))->GetCheck());
+	bool isTrackChecked = (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_TRACK_CHECK))->GetCheck());
+   if (isLocalChecked && !isSuperChecked) {
 	   cv::Mat processed_img = pDlg->distortionCailbration.process(gray_host);
 	   gray_host = processed_img;
    }
    //这里放拼接（放过了）
-   if (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck())
+   //if (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck())
+   //{
+	  // cv::Mat gray_host1 = noLocalImage;
+	  // // 1. 调用辅助函数获取放大后的中心视图
+	  // cv::Mat super_input = pDlg->extractAndResizeCenterView(gray_host);
+
+	  // // 检查函数是否成功返回图像
+	  // if (super_input.empty()) {
+		 //  return; // 如果提取失败，则中止后续操作
+	  // }
+	  // gray_host = super_input;
+	  // // 将原始、清晰的 centerView 送入，你的 TensorRT 类会正确处理缩放
+	  // m_super_tensorRT->preprocessImage_LightField(gray_host1, 3);
+	  // m_super_tensorRT->inference(1);
+	  // // 后处理得到的结果 depth_result 是对应 centerView 尺寸的深度图
+	  // cv::Mat super_result = m_super_tensorRT->postprocessOutput_Super(1);
+	  // cv::Mat resizedFinalSuperImg;
+	  // cv::resize(super_result, resizedFinalSuperImg, cv::Size(Width, Height), 0, 0, cv::INTER_LINEAR);
+	  // //gray_host = resizedFinalSuperImg;
+	  // m_DlgPointer->m_saiHost = super_result;
+   //}
+   if (isSuperChecked && !isDepthChecked &&!isTrackChecked)
    {
 	   cv::Mat gray_host1 = gray_host;
-	   // 1. 调用辅助函数获取放大后的中心视图
-	   cv::Mat super_input = pDlg->extractAndResizeCenterView(gray_host);
+	   //// 1. 调用辅助函数获取放大后的中心视图
+	   //cv::Mat super_input = pDlg->extractAndResizeCenterView(gray_host);
 
-	   // 检查函数是否成功返回图像
-	   if (super_input.empty()) {
-		   return; // 如果提取失败，则中止后续操作
-	   }
-	   gray_host = super_input;
+	   //// 检查函数是否成功返回图像
+	   //if (super_input.empty()) {
+		  // return; // 如果提取失败，则中止后续操作
+	   //}
+	   /*gray_host = super_input;*/
 	   // 将原始、清晰的 centerView 送入，你的 TensorRT 类会正确处理缩放
-	   m_super_tensorRT->preprocessImage_LightField(gray_host1, 3);
+	   cv::Mat center_view = pDlg->extractCenterView(gray_host1);
+	   cv::Mat center_view_resized;
+	   cv::resize(center_view, center_view_resized, cv::Size(160, 128), 0, 0, cv::INTER_LINEAR);
+	   m_super_tensorRT->preprocessImage_LightField2(center_view_resized);
 	   m_super_tensorRT->inference(1);
 	   // 后处理得到的结果 depth_result 是对应 centerView 尺寸的深度图
-	   cv::Mat super_result = m_super_tensorRT->postprocessOutput_Super(1);
+	   cv::Mat super_result = m_super_tensorRT->postprocessOutput_Super2(1);
+	  // cv::Mat resized_result;
+	   //cv::resize(super_result, resized_result, cv::Size(320, 256), 0, 0, cv::INTER_LINEAR);
 	   cv::Mat resizedFinalSuperImg;
 	   cv::resize(super_result, resizedFinalSuperImg, cv::Size(Width, Height), 0, 0, cv::INTER_LINEAR);
 	   gray_host = resizedFinalSuperImg;
 	   m_DlgPointer->m_saiHost = super_result;
    }
-   if (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_DEPTH_CHECK))->GetCheck())
+   if (isDepthChecked)
    {
-	   if (BST_CHECKED != ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck()) {
+	   //if (!isSuperChecked) {
 		   // 1. 调用辅助函数获取放大后的中心视图
 		   cv::Mat depth_input = pDlg->extractAndResizeCenterView(gray_host);
 
@@ -583,7 +634,7 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 			   return; // 如果提取失败，则中止后续操作
 		   }
 		   gray_host = depth_input;
-	   }  
+	  // }  
 	   m_depth_tensorRT->preprocessImage_Depth(gray_host);
 	   m_depth_tensorRT->inference(1);
 	   // 后处理得到的结果 depth_result 是对应 centerView 尺寸的深度图
@@ -597,17 +648,27 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 	   cv::resize(final_display_img, resizedFinalDisplayImg, cv::Size(Width, Height), 0, 0, cv::INTER_LINEAR);
 	   gray_host = final_display_img;
    }
-   if (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_DETECTION_CHECK))->GetCheck())
+
+   if (isDetection1Checked || isDetection2Checked)
    {
 	   // 始终在原始图像上运行检测
 	   cv::Mat original_gray_host = gray_host.clone(); // 克隆原始图像用于检测
 
-	   // 预处理 (使用原始图像)
-	   m_detect_tensorRT->preprocessImage_Detect(original_gray_host);
-	   // 执行推理 (使用原始图像)
-	   m_detect_tensorRT->inference(1);
-	   // 后处理
-	   std::vector<Detection> detections = m_detect_tensorRT->postprocessOutputYOLOV8(1);
+	   // 根据哪个检测器被选中来执行相应的检测
+	   std::vector<Detection> detections;
+
+	   if (isDetection1Checked) {
+		   // 使用第一个检测器
+		   m_detect_tensorRT->preprocessImage_Detect(original_gray_host);
+		   m_detect_tensorRT->inference(1);
+		   detections = m_detect_tensorRT->postprocessOutputYOLOV8(1);
+	   }
+	   else {
+		   // 使用第二个检测器
+		   m_detectssd_tensorRT->preprocessImage_Detect(original_gray_host);
+		   m_detectssd_tensorRT->inference(1);
+		   detections = m_detectssd_tensorRT->postprocessOutputYOLOV8(1);
+	   }
 
 	   // 定义固定中心区域（区域5）的ROI，用于后续判断和坐标转换
 	   // 区域5的坐标 (1-based): {171, 350, 210, 420}  -> 0-based: {170, 349, 209, 419}
@@ -623,12 +684,11 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 	   fixedCenterROI.width = std::min(fixedCenterROI.width, original_gray_host.cols - fixedCenterROI.x);
 	   fixedCenterROI.height = std::min(fixedCenterROI.height, original_gray_host.rows - fixedCenterROI.y);
 
-
 	   // 准备一个图像用于最终显示（可能是原始图像或放大的中心区域）
 	   cv::Mat finalDisplayImage;
+	   bool isSuperCheckEnabled = (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck());
 
-	   // 判断是否需要显示放大的中心区域
-	   if (BST_CHECKED != ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck()) {
+	   if (!isSuperCheckEnabled) {
 		   // 如果 IDC_SUPER_CHECK 未选中，则提取并放大固定中心区域
 		   finalDisplayImage = pDlg->extractAndResizeCenterView(original_gray_host);
 		   if (finalDisplayImage.empty()) {
@@ -649,7 +709,7 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 		   bool shouldDraw = false;
 		   cv::Rect boxToDraw; // 最终要绘制的框，可能需要坐标转换
 
-		   if (BST_CHECKED != ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck()) {
+		   if (!isSuperCheckEnabled) {
 			   // 如果显示的是放大的中心区域 (IDC_SUPER_CHECK 未选中)
 			   // 检查原始框是否与固定中心区域有交集
 			   cv::Rect intersection = originalBox & fixedCenterROI;
@@ -665,12 +725,6 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 				   boxToDraw.y = static_cast<int>((originalBox.y - fixedCenterROI.y) * scale_y);
 				   boxToDraw.width = static_cast<int>(originalBox.width * scale_x);
 				   boxToDraw.height = static_cast<int>(originalBox.height * scale_y);
-
-				   // 确保绘制的框在 finalDisplayImage 内部
-				   boxToDraw.x = std::max(0, boxToDraw.x);
-				   boxToDraw.y = std::max(0, boxToDraw.y);
-				   boxToDraw.width = std::min(boxToDraw.width, finalDisplayImage.cols - boxToDraw.x);
-				   boxToDraw.height = std::min(boxToDraw.height, finalDisplayImage.rows - boxToDraw.y);
 			   }
 		   }
 		   else {
@@ -678,25 +732,133 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 			   // 直接绘制原始检测框
 			   shouldDraw = true;
 			   boxToDraw = originalBox;
+		   }
 
+		   if (shouldDraw) {
 			   // 确保绘制的框在 finalDisplayImage 内部
 			   boxToDraw.x = std::max(0, boxToDraw.x);
 			   boxToDraw.y = std::max(0, boxToDraw.y);
 			   boxToDraw.width = std::min(boxToDraw.width, finalDisplayImage.cols - boxToDraw.x);
 			   boxToDraw.height = std::min(boxToDraw.height, finalDisplayImage.rows - boxToDraw.y);
-		   }
 
-		   if (shouldDraw && boxToDraw.width > 0 && boxToDraw.height > 0) {
-			   cv::rectangle(finalDisplayImage, boxToDraw, cv::Scalar(255, 255, 255), 2);
-			   cv::putText(finalDisplayImage,
-				   m_detect_tensorRT->getClassName(det.classId) + " " + std::to_string(det.confidence),
-				   cv::Point(boxToDraw.x, boxToDraw.y - 5),
-				   cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255), 1);
+			   if (boxToDraw.width > 0 && boxToDraw.height > 0) {
+				   // 根据使用的检测器选择相应的类名获取函数
+				   std::string className = isDetection1Checked ?
+					   m_detect_tensorRT->getClassName(det.classId) :
+					   m_detectssd_tensorRT->getClassName(det.classId);
+
+				   cv::rectangle(finalDisplayImage, boxToDraw, cv::Scalar(255, 255, 255), 2);
+				   cv::putText(finalDisplayImage,
+					   className + " " + std::to_string(det.confidence),
+					   cv::Point(boxToDraw.x, boxToDraw.y - 5),
+					   cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255), 1);
+			   }
 		   }
 	   }
+
 	   // 将最终的显示图像赋值给 gray_host
 	   gray_host = finalDisplayImage;
    }
+   //if (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_DETECTION_CHECK2))->GetCheck())
+   //{
+	  // // 始终在原始图像上运行检测
+	  // cv::Mat original_gray_host = gray_host.clone(); // 克隆原始图像用于检测
+
+	  // // 预处理 (使用原始图像)
+	  // m_detectssd_tensorRT->preprocessImage_Detect(original_gray_host);
+	  // // 执行推理 (使用原始图像)
+	  // m_detectssd_tensorRT->inference(1);
+	  // // 后处理
+	  // std::vector<Detection> detections = m_detectssd_tensorRT->postprocessOutputYOLOV8(1);
+
+	  // // 定义固定中心区域（区域5）的ROI，用于后续判断和坐标转换
+	  // // 区域5的坐标 (1-based): {171, 350, 210, 420}  -> 0-based: {170, 349, 209, 419}
+	  // int fixed_roi_x = 210 - 1;
+	  // int fixed_roi_y = 171 - 1;
+	  // int fixed_roi_width = (420 - 1) - fixed_roi_x + 1;
+	  // int fixed_roi_height = (350 - 1) - fixed_roi_y + 1;
+	  // cv::Rect fixedCenterROI(fixed_roi_x, fixed_roi_y, fixed_roi_width, fixed_roi_height);
+
+	  // // 确保 fixedCenterROI 不超出原始图像边界
+	  // fixedCenterROI.x = std::max(0, fixedCenterROI.x);
+	  // fixedCenterROI.y = std::max(0, fixedCenterROI.y);
+	  // fixedCenterROI.width = std::min(fixedCenterROI.width, original_gray_host.cols - fixedCenterROI.x);
+	  // fixedCenterROI.height = std::min(fixedCenterROI.height, original_gray_host.rows - fixedCenterROI.y);
+
+
+	  // // 准备一个图像用于最终显示（可能是原始图像或放大的中心区域）
+	  // cv::Mat finalDisplayImage;
+
+	  // // 判断是否需要显示放大的中心区域
+	  // if (BST_CHECKED != ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck()) {
+		 //  // 如果 IDC_SUPER_CHECK 未选中，则提取并放大固定中心区域
+		 //  finalDisplayImage = pDlg->extractAndResizeCenterView(original_gray_host);
+		 //  if (finalDisplayImage.empty()) {
+			//   // 如果提取失败，退回到显示原始图像
+			//   finalDisplayImage = original_gray_host.clone();
+		 //  }
+	  // }
+	  // else {
+		 //  // 如果 IDC_SUPER_CHECK 选中，则显示原始图像
+		 //  finalDisplayImage = original_gray_host.clone();
+	  // }
+
+	  // // 遍历检测结果，并绘制到 finalDisplayImage 上
+	  // for (const auto& det : detections) {
+		 //  cv::Rect originalBox(det.x, det.y, det.width, det.height);
+
+		 //  // 决定是否绘制这个检测框
+		 //  bool shouldDraw = false;
+		 //  cv::Rect boxToDraw; // 最终要绘制的框，可能需要坐标转换
+
+		 //  if (BST_CHECKED != ((CButton*)pDlg->GetDlgItem(IDC_SUPER_CHECK))->GetCheck()) {
+			//   // 如果显示的是放大的中心区域 (IDC_SUPER_CHECK 未选中)
+			//   // 检查原始框是否与固定中心区域有交集
+			//   cv::Rect intersection = originalBox & fixedCenterROI;
+			//   if (!intersection.empty()) {
+			//	   shouldDraw = true;
+			//	   // 计算原始检测框在固定中心区域内的相对坐标
+			//	   // 然后将其按放大比例转换到 finalDisplayImage 上
+			//	   // 放大比例 = 最终图像宽度 / 固定中心区域宽度
+			//	   double scale_x = (double)finalDisplayImage.cols / fixedCenterROI.width;
+			//	   double scale_y = (double)finalDisplayImage.rows / fixedCenterROI.height;
+
+			//	   boxToDraw.x = static_cast<int>((originalBox.x - fixedCenterROI.x) * scale_x);
+			//	   boxToDraw.y = static_cast<int>((originalBox.y - fixedCenterROI.y) * scale_y);
+			//	   boxToDraw.width = static_cast<int>(originalBox.width * scale_x);
+			//	   boxToDraw.height = static_cast<int>(originalBox.height * scale_y);
+
+			//	   // 确保绘制的框在 finalDisplayImage 内部
+			//	   boxToDraw.x = std::max(0, boxToDraw.x);
+			//	   boxToDraw.y = std::max(0, boxToDraw.y);
+			//	   boxToDraw.width = std::min(boxToDraw.width, finalDisplayImage.cols - boxToDraw.x);
+			//	   boxToDraw.height = std::min(boxToDraw.height, finalDisplayImage.rows - boxToDraw.y);
+			//   }
+		 //  }
+		 //  else {
+			//   // 如果显示的是原始图像 (IDC_SUPER_CHECK 选中)
+			//   // 直接绘制原始检测框
+			//   shouldDraw = true;
+			//   boxToDraw = originalBox;
+
+			//   // 确保绘制的框在 finalDisplayImage 内部
+			//   boxToDraw.x = std::max(0, boxToDraw.x);
+			//   boxToDraw.y = std::max(0, boxToDraw.y);
+			//   boxToDraw.width = std::min(boxToDraw.width, finalDisplayImage.cols - boxToDraw.x);
+			//   boxToDraw.height = std::min(boxToDraw.height, finalDisplayImage.rows - boxToDraw.y);
+		 //  }
+
+		 //  if (shouldDraw && boxToDraw.width > 0 && boxToDraw.height > 0) {
+			//   cv::rectangle(finalDisplayImage, boxToDraw, cv::Scalar(255, 255, 255), 2);
+			//   cv::putText(finalDisplayImage,
+			//	   m_detectssd_tensorRT->getClassName(det.classId) + " " + std::to_string(det.confidence),
+			//	   cv::Point(boxToDraw.x, boxToDraw.y - 5),
+			//	   cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255), 1);
+		 //  }
+	  // }
+	  // // 将最终的显示图像赋值给 gray_host
+	  // gray_host = finalDisplayImage;
+   //}
    //if (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_DETECTION_CHECK))->GetCheck())
    //{
 	  // /*// 定义要分割的区域（与MATLAB脚本相同）
@@ -825,23 +987,21 @@ void CGrabDemoDlg::XferCallback(SapXferCallbackInfo *pInfo)
 	  // }
    //}
     // 检查 IDC_TRACK_CHECK 复选框是否被选中
-	bool currentTrackChecked = (BST_CHECKED == ((CButton*)pDlg->GetDlgItem(IDC_TRACK_CHECK))->GetCheck());
-	if (currentTrackChecked)
+	if (isTrackChecked)
 	{
 		// 1. 初始检查和准备
 		if (gray_host.empty()) {
 			return;
 		}
 
-		cv::Mat centerImage;
-		
-
-		// 关键修复：所有帧都需要在原始图像基础上提取中心区域
+		cv::Mat centerImage ;
+			// 关键修复：所有帧都需要在原始图像基础上提取中心区域
 		cv::Mat originalImage = gray_host.clone();
 		centerImage = pDlg->extractAndResizeCenterView(originalImage);
 		if (centerImage.empty()) {
 			centerImage = originalImage.clone();
 		}
+
 		//pDlg->m_enableTracking = true; // 只在初始化成功时开启跟踪
 		// 4. 核心跟踪逻辑
 		if (pDlg->m_tracker) {
@@ -1099,10 +1259,15 @@ cv::Mat CGrabDemoDlg::extractAndResizeCenterView(const cv::Mat& sourceImage)
 
 	// 2. 定义中心视图的ROI坐标
 	// 区域5的坐标 (1-based): {171, 350, 210, 420}
-	int roi_x = 210 - 1;
-	int roi_y = 171 - 1;
+	int roi_x = 210 ;
+	int roi_y = 171 ;
 	int roi_width = 420 - roi_x;
 	int roi_height = 350 - roi_y;
+
+	//int roi_x = 235 - 1;
+	//int roi_y = 180 - 1;
+	//int roi_width = 395 - roi_x;
+	//int roi_height = 308 - roi_y;
 
 	// 3. 边界检查，防止ROI超出图像范围
 	if (roi_x < 0 || roi_y < 0 ||
@@ -1122,6 +1287,40 @@ cv::Mat CGrabDemoDlg::extractAndResizeCenterView(const cv::Mat& sourceImage)
 	cv::resize(centerView, resizedView, cv::Size(originalWidth, originalHeight), 0, 0, cv::INTER_LINEAR);
 
 	return resizedView;
+}
+
+cv::Mat CGrabDemoDlg::extractCenterView(const cv::Mat& sourceImage)
+{
+	// 1. 获取原始图像尺寸
+	int originalWidth = sourceImage.cols;
+	int originalHeight = sourceImage.rows;
+
+	// 2. 定义中心视图的ROI坐标
+	// 区域5的坐标 (1-based): {171, 350, 210, 420}
+	int roi_x = 210;
+	int roi_y = 171;
+	int roi_width = 420 - roi_x;
+	int roi_height = 350 - roi_y;
+
+	//int roi_x = 235 - 1;
+	//int roi_y = 180 - 1;
+	//int roi_width = 395 - roi_x;
+	//int roi_height = 308 - roi_y;
+
+	// 3. 边界检查，防止ROI超出图像范围
+	if (roi_x < 0 || roi_y < 0 ||
+		roi_x + roi_width > originalWidth || roi_y + roi_height > originalHeight)
+	{
+		// 如果ROI无效，可以报错或返回一个空Mat
+		AfxMessageBox(_T("Center ROI is out of image bounds!"));
+		return cv::Mat(); // 返回一个空Mat，调用者需要检查
+	}
+
+	// 4. 提取中心视图
+	cv::Rect centerViewROI(roi_x, roi_y, roi_width, roi_height);
+	cv::Mat centerView = sourceImage(centerViewROI);
+
+	return centerView;
 }
 //畸变矫正
 void CGrabDemoDlg::localEnlarge(int Height, int Width)
@@ -1317,7 +1516,8 @@ BOOL CGrabDemoDlg::OnInitDialog()
 
 	   size_t pos = strExePath.find_last_of("\\/");
 	   std::string exeDir = (pos != std::string::npos) ? strExePath.substr(0, pos) : "";
-	   std::string detect_enginePath = exeDir + "\\yolov8_1017.engine";
+	   std::string detect_enginePath2 = exeDir + "\\SE-SSD.engine";
+	   std::string detect_enginePath = exeDir + "\\yolov8_1026.engine";
 	   std::string depth_enginePath = exeDir + "\\depth_anything_v2_vits_518x616.engine";
 	   std::string super_enginePath ;
 	   m_tracker = new TrackerUtils();
@@ -1331,22 +1531,22 @@ BOOL CGrabDemoDlg::OnInitDialog()
 	   {
 	   case 0: // "正常"
 		   //AfxMessageBox(_T("选择了：正常"));
-		   super_enginePath= exeDir + "\\IINet_scale2_142x170.engine";
+		   super_enginePath= exeDir + "\\NovelViewSynthesis3.engine";
 		   break;
 
 	   case 1: // "云"
 		   //AfxMessageBox(_T("选择了：云"));
-           super_enginePath = exeDir + "\\IINet_scale2_142x170.engine";
+           super_enginePath = exeDir + "\\NovelViewSynthesis3.engine";
 		   break;
 
 	   case 2: // "雾"
 		   //AfxMessageBox(_T("选择了：雾"));
-           super_enginePath = exeDir + "\\IINet_scale2_142x170.engine";
+           super_enginePath = exeDir + "\\NovelViewSynthesis3.engine";
 		   break;
 
 	   case 3: // "雨"
 		   //AfxMessageBox(_T("选择了：雨"));
-           super_enginePath = exeDir + "\\IINet_scale2_142x170.engine";
+           super_enginePath = exeDir + "\\NovelViewSynthesis3.engine";
 		   break;
 
 	   default:
@@ -1355,17 +1555,22 @@ BOOL CGrabDemoDlg::OnInitDialog()
 	   m_super_tensorRT = new MyTensorRT(super_enginePath, true);
 	   m_depth_tensorRT = new MyTensorRT(depth_enginePath, true);
 	   m_detect_tensorRT = new MyTensorRT(detect_enginePath, true);
+	   m_detectssd_tensorRT = new MyTensorRT(detect_enginePath2, true);
 	   m_track_tensorRT = new MyTensorRT(detect_enginePath, true);
 	   //// 如果你正在测试超分模型:
-	   m_super_tensorRT->setModelType(ModelType::SuperResolution_IINet);
+	   m_super_tensorRT->setModelType(ModelType::SuperResolution_View_Synthesis);
 	   m_depth_tensorRT->setModelType(ModelType::DepthEstimation_DepthAnything);
 	   m_detect_tensorRT->setModelType(ModelType::ObjectDetection_YOLOv8);
+	   m_detectssd_tensorRT->setModelType(ModelType::ObjectDetection_YOLOv8);
 	   m_track_tensorRT->setModelType(ModelType::ObjectDetection_YOLOv8);
+	   
 	   ////gpu 预热
 	   m_super_tensorRT->warmup(5);
 	   m_depth_tensorRT->warmup(5);
 	   m_detect_tensorRT->warmup(5);
+	   m_detectssd_tensorRT->warmup(5);
 	   m_track_tensorRT->warmup(5);
+	   
 	   // --- 超分辨率的推理流程 ---
        // 1. 加载一张低分辨率的测试图片
        // 注意：这张图片的尺寸必须严格符合模型输入的 H 和 W
@@ -1474,7 +1679,39 @@ BOOL CGrabDemoDlg::OnInitDialog()
 	   //}
 	   //cv::imshow("detectResult",testMat);
 	   //cv::waitKey(0);
+	    
+	    
+	   //cv::Mat lr_image = cv::imread(exeDir + "\\001_2.png" , cv::IMREAD_GRAYSCALE);
+
+	   //DWORD start, end;
+	   //DWORD processTime;
+
+	   //start = GetTickCount();
+
+	   //// 2. 预处理 (调用超分专用的函数)   
+	   //m_super_tensorRT->preprocessImage_LightField2(lr_image);
+
+	   //// 3. 执行推理 (复用通用的推理函数)
+	   //m_super_tensorRT->inference(1);
+
+	   //// 4. 后处理 (调用超分专用的函数)    
+	   //cv::Mat sr_result = m_super_tensorRT->postprocessOutput_Super2(1);
+
+
+	   //end = GetTickCount();
+	   //processTime = end - start;
+	   //// 5. 显示和保存结果
+	   //CString msg;
+	   //msg.Format(_T("超分辨率完成, 花费时间 %d 毫秒"), processTime);
+	   //MessageBox(msg, _T("处理结果"), MB_OK | MB_ICONINFORMATION);
+
+	   //// 在窗口中显示输入的低分辨率图和输出的高分辨率图
+	   //cv::imshow("Low-Resolution Input", lr_image);
+	   //cv::imshow("Super-Resolution Result", sr_result);
+	   //cv::waitKey(0); // 等待按键后关闭窗口
 	   //TODO本地文件测试，正式使用以上屏蔽
+
+
    }
    catch (const std::exception& e) {
 	   CString errorMsg;  
@@ -1484,21 +1721,23 @@ BOOL CGrabDemoDlg::OnInitDialog()
    }
 
 
-  // CButton* supercheckItem = (CButton*)GetDlgItem(IDC_SUPER_CHECK);  // 获取视角合成ID
-  // CButton* depthcheckItem = (CButton*)GetDlgItem(IDC_DEPTH_CHECK);  // 获取深度估计ID
-  // CButton* jibiancheckItem = (CButton*)GetDlgItem(IDC_Local_Enlarge); //获取畸变矫正ID
-  // CButton* mubiaocheckItem = (CButton*)GetDlgItem(IDC_DETECTION_CHECK); //获取目标检测ID
-
-  // if (supercheckItem && depthcheckItem&& jibiancheckItem&& mubiaocheckItem)
-  // {
-
-		//depthcheckItem->EnableWindow(FALSE); 
-  //      mubiaocheckItem->EnableWindow(FALSE);
-  //      supercheckItem->EnableWindow(FALSE);
-  // }
+   CButton* supercheckItem = (CButton*)GetDlgItem(IDC_SUPER_CHECK);  // 获取视角合成ID
+   CButton* depthcheckItem = (CButton*)GetDlgItem(IDC_DEPTH_CHECK);  // 获取深度估计ID
+   CButton* jibiancheckItem = (CButton*)GetDlgItem(IDC_Local_Enlarge); //获取畸变矫正ID
+   CButton* mubiaocheckItem = (CButton*)GetDlgItem(IDC_DETECTION_CHECK); //获取目标检测ID
+   CButton* trackcheckItem = (CButton*)GetDlgItem(IDC_TRACK_CHECK); //目标追踪
+   CButton* mubiaocheckItem2 = (CButton*)GetDlgItem(IDC_DETECTION_CHECK2);
 
 
+   if (supercheckItem && depthcheckItem&& jibiancheckItem&& mubiaocheckItem && trackcheckItem && mubiaocheckItem2)
+   {
 
+		depthcheckItem->EnableWindow(FALSE); 
+        mubiaocheckItem->EnableWindow(FALSE);
+        supercheckItem->EnableWindow(FALSE);
+		trackcheckItem->EnableWindow(FALSE);
+		mubiaocheckItem2->EnableWindow(FALSE);
+   }
 
    return TRUE;  // return TRUE  unless you set the focus to a control
 }
@@ -3638,25 +3877,32 @@ void CGrabDemoDlg::OnBnClickedLocalEnlarge()//畸变矫正
 	CButton* depthcheckItem = (CButton*)GetDlgItem(IDC_DEPTH_CHECK);  // 获取深度估计ID
 	CButton* jibiancheckItem = (CButton*)GetDlgItem(IDC_Local_Enlarge); //获取畸变矫正ID
 	CButton* mubiaocheckItem = (CButton*)GetDlgItem(IDC_DETECTION_CHECK); //获取目标检测ID
+	CButton* trackcheckItem = (CButton*)GetDlgItem(IDC_TRACK_CHECK); //目标追踪
+	CButton* mubiaocheckItem2 = (CButton*)GetDlgItem(IDC_DETECTION_CHECK2);
 
-	//if (supercheckItem && depthcheckItem && jibiancheckItem && mubiaocheckItem)
-	//{
-	//	if (jibiancheckItem->GetCheck() == BST_UNCHECKED)//BST_UNCHECKED表示未选中
-	//	{
-	//		depthcheckItem->EnableWindow(FALSE);
-	//		depthcheckItem->SetCheck(BST_UNCHECKED); // 可选：取消选中
-	//		mubiaocheckItem->EnableWindow(FALSE);
- //           mubiaocheckItem->SetCheck(BST_UNCHECKED);
-	//		supercheckItem->EnableWindow(FALSE);
-	//		supercheckItem->SetCheck(BST_UNCHECKED);
-
-	//	}
-	//	else
-	//	{
-	//		mubiaocheckItem->EnableWindow(TRUE);
-	//		supercheckItem->EnableWindow(TRUE);
-	//	}
-	//}
+	if (supercheckItem && depthcheckItem && jibiancheckItem && mubiaocheckItem && trackcheckItem)
+	{
+		if (jibiancheckItem->GetCheck() == BST_UNCHECKED)//BST_UNCHECKED表示未选中
+		{
+			depthcheckItem->EnableWindow(FALSE);
+			depthcheckItem->SetCheck(BST_UNCHECKED); // 可选：取消选中
+			mubiaocheckItem->EnableWindow(FALSE);
+            mubiaocheckItem->SetCheck(BST_UNCHECKED);
+			supercheckItem->EnableWindow(FALSE);
+			supercheckItem->SetCheck(BST_UNCHECKED);
+			trackcheckItem->EnableWindow(FALSE);
+			trackcheckItem->SetCheck(BST_UNCHECKED);
+			mubiaocheckItem2->EnableWindow(FALSE);  // 深度估计置灰
+			mubiaocheckItem2->SetCheck(BST_UNCHECKED); // 深度估计取消选中
+		}
+		else
+		{
+			mubiaocheckItem->EnableWindow(TRUE);
+			supercheckItem->EnableWindow(TRUE);
+			trackcheckItem->EnableWindow(TRUE);
+			mubiaocheckItem2->EnableWindow(TRUE);
+		}
+	}
 	UpdateSavePath();
 }
 
@@ -3673,19 +3919,33 @@ void CGrabDemoDlg::OnBnClickedCheck1()//目标检测对应函数
 	CButton* mubiaocheckItem = (CButton*)GetDlgItem(IDC_DETECTION_CHECK); //获取目标检测ID
 	CButton* depthcheckItem = (CButton*)GetDlgItem(IDC_DEPTH_CHECK);  // 深度估计
 	CButton* supercheckItem = (CButton*)GetDlgItem(IDC_SUPER_CHECK);  // 视角合成
+	CButton* trackcheckItem = (CButton*)GetDlgItem(IDC_TRACK_CHECK); //目标追踪IDC_DETECTION_CHECK2
+	CButton* mubiaocheckItem2 = (CButton*)GetDlgItem(IDC_DETECTION_CHECK2); //获取目标检测ID
 
-	//if (mubiaocheckItem && depthcheckItem)
-	//{
-	//	if (mubiaocheckItem->GetCheck() == BST_UNCHECKED && supercheckItem->GetCheck() == BST_CHECKED)
-	//	{
-	//		depthcheckItem->EnableWindow(TRUE);  // 深度估计 选中
-	//	}
-	//	else
-	//	{
-	//		depthcheckItem->EnableWindow(FALSE);  // 深度估计 置灰
-	//		depthcheckItem->SetCheck(BST_UNCHECKED); // 可选：取消选中
-	//	}
-	//}
+
+
+	if (mubiaocheckItem && depthcheckItem && supercheckItem && trackcheckItem && mubiaocheckItem2)
+	{
+		if (mubiaocheckItem->GetCheck() == BST_CHECKED)// 如果追踪被选中
+		{
+			trackcheckItem->SetCheck(BST_UNCHECKED); //目标检测取消选中
+			trackcheckItem->EnableWindow(FALSE);  // 目标检测置灰
+			depthcheckItem->EnableWindow(FALSE);  // 深度估计置灰
+			depthcheckItem->SetCheck(BST_UNCHECKED); // 深度估计取消选中
+			mubiaocheckItem2->EnableWindow(FALSE);  // 深度估计置灰
+			mubiaocheckItem2->SetCheck(BST_UNCHECKED); // 深度估计取消选中
+		}
+		else
+		{
+			if (supercheckItem->GetCheck() == BST_CHECKED && mubiaocheckItem2->GetCheck() == BST_UNCHECKED
+				&& trackcheckItem->GetCheck() == BST_UNCHECKED) //如果视角合成被选中
+			{
+				depthcheckItem->EnableWindow(TRUE); // 深度估计可用
+			}
+			trackcheckItem->EnableWindow(TRUE); // 目标检测可用
+			mubiaocheckItem2->EnableWindow(TRUE);
+		}
+	}
 	UpdateSavePath();
 
 }
@@ -3698,26 +3958,28 @@ void CGrabDemoDlg::OnBnClickedDepthCheck()//深度估计
 }
 
 
-void CGrabDemoDlg::OnBnClickedSuperCheck()
+void CGrabDemoDlg::OnBnClickedSuperCheck()//视角合成
 {
 	// TODO: 在此添加控件通知处理程序代码
 	CButton* mubiaocheckItem = (CButton*)GetDlgItem(IDC_DETECTION_CHECK); //获取目标检测ID
 	CButton* supercheckItem = (CButton*)GetDlgItem(IDC_SUPER_CHECK);  // 视角合成
 	CButton* depthcheckItem = (CButton*)GetDlgItem(IDC_DEPTH_CHECK);  // 深度估计
-
-	//if (supercheckItem && depthcheckItem)
-	//{
-	//	if (supercheckItem->GetCheck() == BST_CHECKED && mubiaocheckItem->GetCheck() == BST_UNCHECKED)
-	//	{
-	//		depthcheckItem->EnableWindow(TRUE);   // 深度估计 可用
-	//		
-	//	}
-	//	else
-	//	{
-	//		depthcheckItem->EnableWindow(FALSE);  // 深度估计 置灰
-	//		depthcheckItem->SetCheck(BST_UNCHECKED); // 可选：取消选中
-	//	}
-	//}
+	CButton* trackcheckItem = (CButton*)GetDlgItem(IDC_TRACK_CHECK); //目标追踪
+	CButton* mubiaocheckItem2 = (CButton*)GetDlgItem(IDC_DETECTION_CHECK2); //获取目标检测ID
+	if (supercheckItem && depthcheckItem && mubiaocheckItem && trackcheckItem)
+	{
+		if (supercheckItem->GetCheck() == BST_CHECKED && mubiaocheckItem->GetCheck() == BST_UNCHECKED
+			&& trackcheckItem->GetCheck() == BST_UNCHECKED && mubiaocheckItem2->GetCheck() == BST_UNCHECKED)
+		{
+			depthcheckItem->EnableWindow(TRUE);   // 深度估计 可用
+			
+		}
+		else
+		{
+			depthcheckItem->EnableWindow(FALSE);  // 深度估计 置灰
+			depthcheckItem->SetCheck(BST_UNCHECKED); // 可选：取消选中
+		}
+	}
 	UpdateSavePath();
 }
 
@@ -3775,9 +4037,40 @@ void CGrabDemoDlg::OnCbnSelchangeCombo1()
 }
 
 
-void CGrabDemoDlg::OnBnClickedTrackCheck()
+void CGrabDemoDlg::OnBnClickedTrackCheck()//目标追踪
 {
 	// TODO: 在此添加控件通知处理程序代码
+	CButton* mubiaocheckItem = (CButton*)GetDlgItem(IDC_DETECTION_CHECK); //获取目标检测ID
+	CButton* depthcheckItem = (CButton*)GetDlgItem(IDC_DEPTH_CHECK);  // 深度估计
+	CButton* supercheckItem = (CButton*)GetDlgItem(IDC_SUPER_CHECK);  // 视角合成
+	CButton* trackcheckItem = (CButton*)GetDlgItem(IDC_TRACK_CHECK); //目标追踪IDC_DETECTION_CHECK2
+	CButton* mubiaocheckItem2 = (CButton*)GetDlgItem(IDC_DETECTION_CHECK2); //获取目标检测ID
+
+
+
+	if (mubiaocheckItem && depthcheckItem && supercheckItem && trackcheckItem && mubiaocheckItem2)
+	{
+		if (trackcheckItem->GetCheck() == BST_CHECKED)// 如果追踪被选中
+		{
+			mubiaocheckItem->SetCheck(BST_UNCHECKED); //目标检测取消选中
+			mubiaocheckItem->EnableWindow(FALSE);  // 目标检测置灰
+			depthcheckItem->EnableWindow(FALSE);  // 深度估计置灰
+			depthcheckItem->SetCheck(BST_UNCHECKED); // 深度估计取消选中
+			mubiaocheckItem2->EnableWindow(FALSE);  // 深度估计置灰
+			mubiaocheckItem2->SetCheck(BST_UNCHECKED); // 深度估计取消选中
+		}
+		else
+		{
+			if (supercheckItem->GetCheck() == BST_CHECKED && mubiaocheckItem2->GetCheck() == BST_UNCHECKED
+				&& mubiaocheckItem->GetCheck() == BST_UNCHECKED) //如果视角合成被选中
+			{
+				depthcheckItem->EnableWindow(TRUE); // 深度估计可用
+			}
+			mubiaocheckItem->EnableWindow(TRUE); // 目标检测可用
+			mubiaocheckItem2->EnableWindow(TRUE);
+		}
+	}
+	UpdateSavePath();
 }
 
 
@@ -3789,4 +4082,41 @@ void CGrabDemoDlg::OnEnChangeframes()
 	// 同时将 ENM_CHANGE 标志“或”运算到掩码中。
 
 	// TODO:  在此添加控件通知处理程序代码
+}
+
+
+void CGrabDemoDlg::OnBnClickedDetectionCheck2()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	CButton* mubiaocheckItem = (CButton*)GetDlgItem(IDC_DETECTION_CHECK); //获取目标检测ID
+	CButton* depthcheckItem = (CButton*)GetDlgItem(IDC_DEPTH_CHECK);  // 深度估计
+	CButton* supercheckItem = (CButton*)GetDlgItem(IDC_SUPER_CHECK);  // 视角合成
+	CButton* trackcheckItem = (CButton*)GetDlgItem(IDC_TRACK_CHECK); //目标追踪IDC_DETECTION_CHECK2
+	CButton* mubiaocheckItem2 = (CButton*)GetDlgItem(IDC_DETECTION_CHECK2); //获取目标检测ID
+
+
+
+	if (mubiaocheckItem && depthcheckItem && supercheckItem && trackcheckItem && mubiaocheckItem2)
+	{
+		if (mubiaocheckItem2->GetCheck() == BST_CHECKED)// 如果追踪被选中
+		{
+			mubiaocheckItem->SetCheck(BST_UNCHECKED); //目标检测取消选中
+			mubiaocheckItem->EnableWindow(FALSE);  // 目标检测置灰
+			depthcheckItem->EnableWindow(FALSE);  // 深度估计置灰
+			depthcheckItem->SetCheck(BST_UNCHECKED); // 深度估计取消选中
+			trackcheckItem->EnableWindow(FALSE);  // 深度估计置灰
+			trackcheckItem->SetCheck(BST_UNCHECKED); // 深度估计取消选中
+		}
+		else
+		{
+			if (supercheckItem->GetCheck() == BST_CHECKED && trackcheckItem->GetCheck() == BST_UNCHECKED
+				&& mubiaocheckItem->GetCheck() == BST_UNCHECKED) //如果视角合成被选中
+			{
+				depthcheckItem->EnableWindow(TRUE); // 深度估计可用
+			}
+			mubiaocheckItem->EnableWindow(TRUE); // 目标检测可用
+			trackcheckItem->EnableWindow(TRUE);
+		}
+	}
+	UpdateSavePath();
 }

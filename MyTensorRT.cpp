@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <afx.h>         // MFC核心头文件
 #include <atlstr.h>      // ATL字符串类（如果不使用MFC）
-
+#include "stdafx.h"
 //#define DEBUG
 
 void convertHWCtoNCHW(cv::cuda::GpuMat& hwcInput, float* nchwOutput,
@@ -724,6 +724,97 @@ void MyTensorRT::preprocessImage_LightField(const cv::Mat& nine_grid_image, int 
     //cudaMemcpyAsync(m_inputBuffer, cpu_input_buffer.data(), cpu_input_buffer.size() * sizeof(float), cudaMemcpyHostToDevice, m_stream);
     cudaStreamSynchronize(m_stream);
 }
+
+
+void MyTensorRT::preprocessImage_LightField2(const cv::Mat& input_image)
+{
+    // --- 参数检查 ---
+    if (input_image.empty()) {
+        throw std::runtime_error("Input image is empty.");
+    }
+    int FINAL_HEIGHT = 128;
+    int FINAL_WIDTH = 160;
+    // ====================================================================
+    // 阶段二：对最终图像进行预处理 (类型转换、归一化、BGR转RGB、HWC转CHW)
+    // ====================================================================
+    if (input_image.cols != FINAL_WIDTH || input_image.rows != FINAL_HEIGHT) {
+        std::string error_msg = "Input image size mismatch. Expected: " +
+            std::to_string(FINAL_WIDTH) + "x" +
+            std::to_string(FINAL_HEIGHT) + " (WxH). " +
+            "Actual: " +
+            std::to_string(input_image.cols) + "x" +
+            std::to_string(input_image.rows) + " (WxH).";
+        throw std::runtime_error(error_msg);
+    }
+    cv::Mat processed_image = input_image;
+
+    // 1. 确保是 3 通道
+    if (processed_image.channels() == 1) {
+        cv::cvtColor(processed_image, processed_image, cv::COLOR_GRAY2BGR);
+    }
+
+    // 2. BGR 格式转为 RGB 格式 (大多数深度学习模型期望 RGB)
+    cv::Mat rgb_image;
+    cv::cvtColor(processed_image, rgb_image, cv::COLOR_BGR2RGB);
+
+    // 3. 类型转换并归一化到 [0, 1]
+    cv::Mat float_image;
+    rgb_image.convertTo(float_image, CV_32F, 1.0 / 255.0);
+
+    nvinfer1::Dims dims = getInputDims(); // 假设这个函数能正确获取 TensorRT 模型的输入维度
+    // --- 【MFC 打印代码开始】---
+    //if (dims.nbDims > 0) {
+    //    // 构建要输出的字符串
+    //    CString strDims;
+    //    strDims.Format(_T("--- TensorRT Input Dims Check --- \n"));
+    //    strDims += _T("Expected Input: [1, 3, 179, 210]\n");
+    //    strDims.AppendFormat(_T("Actual Dims count: %d\n"), dims.nbDims);
+
+    //    // 输出各个维度
+    //    for (int i = 0; i < dims.nbDims; ++i) {
+    //        strDims.AppendFormat(_T("Dim %d (Index %d): %d\n"), i + 1, i, dims.d[i]);
+    //    }
+    //    strDims += _T("-----------------------------------\n");
+
+    //    // 使用 OutputDebugString 打印到 Visual Studio 输出窗口
+    //    OutputDebugString(strDims);
+
+    //    // 可选：如果需要在程序运行时立即看到弹窗，可以取消注释下面一行
+    //    AfxMessageBox(strDims); 
+    //}
+    if (dims.nbDims != 4 || dims.d[0] != 1 || dims.d[1] != 3 ||
+        dims.d[2] != FINAL_HEIGHT || dims.d[3] != FINAL_WIDTH) {
+        throw std::runtime_error("Warning: Model input dimensions might not match the expected [1, 3, 128, 160] format.");
+    }
+
+    // ==============================
+        // 阶段三：HWC → CHW（但保留连续内存）
+        // ==============================
+    std::vector<cv::Mat> channels(3);
+    cv::split(float_image, channels);
+
+    // 创建一个连续内存块（3 * H * W）
+    cv::Mat chw_image(3, FINAL_HEIGHT * FINAL_WIDTH, CV_32F);
+
+    for (int i = 0; i < 3; ++i) {
+        cv::Mat channel_1d = channels[i].reshape(1, 1); // 展平为 1 × (H*W)
+        memcpy(chw_image.ptr<float>(i), channel_1d.ptr<float>(), FINAL_HEIGHT * FINAL_WIDTH * sizeof(float));
+    }
+
+    // ==============================
+    // 阶段四：一次性上传到 GPU
+    // ==============================
+    cudaMemcpyAsync(
+        m_inputBuffer,
+        chw_image.ptr<float>(),
+        chw_image.total() * chw_image.elemSize(),
+        cudaMemcpyHostToDevice,
+        m_stream
+    );
+
+    cudaStreamSynchronize(m_stream);
+}
+
 /**
  * @brief 专为深度估计模型设计的预处理函数。
  *        它将输入图像直接缩放、转换颜色空间、归一化，并转换为CHW格式。
@@ -946,6 +1037,60 @@ cv::Mat MyTensorRT::postprocessOutput_Super(int batchSize)
     // 因为我们返回的是 final_image_uint8，它有自己的数据拷贝，
     // 所以不用担心 output_image_float 指向的 m_outputDataFP32 数据在后续被覆盖的问题。
     return final_image_uint8;
+}
+
+cv::Mat MyTensorRT::postprocessOutput_Super2(int batchSize)
+{
+    if (m_outputDataFP32.empty()) {
+        throw std::runtime_error("Output data is empty. Did you run inference() first?");
+    }
+    // 同步 CUDA 流，确保 GPU -> CPU 的拷贝已完成（如果是在其他地方做拷贝的话，这里也保险）
+    cudaStreamSynchronize(m_stream);
+
+    // 2. 获取模型输出维度 (预期 1x3x328x420)
+    nvinfer1::Dims outDims = getOutputDims(0);
+    if (outDims.nbDims != 4) {
+        throw std::runtime_error("Expected a 4D output format [N, C, H, W] for the SR map.");
+    }
+    const int outputHeight = outDims.d[2]; // 预期 328
+    const int outputWidth = outDims.d[3];  // 预期 420
+    const int outputChannels = outDims.d[1];
+
+    //// 检查通道数：必须是 3 通道
+    //if (outputChannels != 3) {
+    //    throw std::runtime_error("Expected a 3 channel output, but got " + std::to_string(outputChannels) + " channels.");
+    //}
+
+    // 3. 将 CHW 格式的 TensorRT 输出数据重组为 HWC (CV_32FC3)
+
+    // 3.1. 分割出 B, G, R 三个通道的 Mat (CV_32FC1)
+    std::vector<cv::Mat> channels;
+    const size_t plane_size = outputHeight * outputWidth;
+
+    for (int i = 0; i < outputChannels; ++i) {
+        // 每个 Mat 引用 m_outputDataFP32 中对应通道的数据
+        cv::Mat channel_plane(outputHeight, outputWidth, CV_32FC1,
+            m_outputDataFP32.data() + i * plane_size);
+        channels.push_back(channel_plane);
+    }
+
+    // 3.2. 合并通道以创建 HWC 格式的彩色 Mat (328x420)
+    cv::Mat color_image_float_original;
+    cv::merge(channels, color_image_float_original);
+
+    // 5. 归一化和类型转换
+    // 对 3 通道的浮点图像进行归一化，并转换为 CV_8UC3 (512x640)
+    cv::Mat final_image_uint8;
+    //// cv::NORM_MINMAX 对所有通道独立进行线性拉伸，并转换为 CV_8U 类型
+    cv::normalize(color_image_float_original, final_image_uint8, 0, 255, cv::NORM_MINMAX, CV_8UC3);
+    //cv::Mat final_image_uint8;
+    //color_image_float_original.convertTo(final_image_uint8, CV_8UC3, 255.0); // 乘以 255.0 并转换为 8位无符号整数 (CV_8UC3)
+    // 转换为灰度
+    cv::Mat gray_image;
+    cv::cvtColor(final_image_uint8, gray_image, cv::COLOR_BGR2GRAY);
+
+    // 返回单通道灰度图 (CV_8UC1)
+    return gray_image;
 }
 /**
  * @brief 专为深度估计模型设计的后处理函数。
@@ -1189,6 +1334,7 @@ void MyTensorRT::warmup(int numIterations)
 
         // 创建一个空白图像用于预热
         cv::Mat warmupImage = cv::Mat::zeros(modelHeight, modelWidth, CV_8UC3);
+        //cv::Mat warmupImage2 = cv::Mat::zeros(179, 210, CV_8UC3);
         //注意：深度估计和目标检测的输入都是三通道的，而光场超分的输入是单通道的
         for (int i = 0; i < numIterations; ++i) {
             // 使用 switch 根据模型类型调用正确的流程
@@ -1203,6 +1349,13 @@ void MyTensorRT::warmup(int numIterations)
                 preprocessImage_Depth(warmupImage);
                 inference(1);
                 postprocessOutput_Depth(1);
+                break;
+
+            case ModelType::SuperResolution_View_Synthesis:
+                // 注意：光场超分的输入尺寸可能与dims不符，我们使用专门的预热图
+                preprocessImage_LightField2(warmupImage);
+                inference(1);
+                postprocessOutput_Super2(1);
                 break;
 
             case ModelType::SuperResolution_IINet:
